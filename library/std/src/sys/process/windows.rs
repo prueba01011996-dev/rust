@@ -73,6 +73,13 @@ impl EnvKey {
 // [4] https://docs.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal
 impl Ord for EnvKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
+        #[cfg(target_family = "rust9x")]
+        {
+            if c::CompareStringOrdinal::available().is_none() {
+                return self.os_string.cmp(&other.os_string);
+            }
+        }
+
         unsafe {
             let result = c::CompareStringOrdinal(
                 self.utf16.as_ptr(),
@@ -124,6 +131,15 @@ impl PartialEq<str> for EnvKey {
 // they are compared using a caseless string mapping.
 impl From<OsString> for EnvKey {
     fn from(k: OsString) -> Self {
+        #[cfg(target_family = "rust9x")]
+        {
+            if c::CompareStringOrdinal::available().is_none() {
+                let mut k = k;
+                k.make_ascii_uppercase();
+                return EnvKey { utf16: Vec::new(), os_string: k };
+            }
+        }
+
         EnvKey { utf16: k.encode_wide().collect(), os_string: k }
     }
 }
@@ -298,12 +314,27 @@ impl Command {
             None
         };
         let program = resolve_exe(&self.program, || env::var_os("PATH"), child_paths)?;
+        #[cfg(not(target_family = "rust9x"))]
         let has_bat_extension = |program: &[u16]| {
             matches!(
                 // Case insensitive "ends_with" of UTF-16 encoded ".bat" or ".cmd"
                 program.len().checked_sub(4).and_then(|i| program.get(i..)),
                 Some([46, 98 | 66, 97 | 65, 116 | 84] | [46, 99 | 67, 109 | 77, 100 | 68])
             )
+        };
+        #[cfg(target_family = "rust9x")]
+        let has_bat_extension = |program: &[u16]| {
+            let ext = program.len().checked_sub(4).and_then(|i| program.get(i..));
+            if crate::sys::compat::checks::is_windows_nt() {
+                matches!(
+                    // Case insensitive "ends_with" of UTF-16 encoded ".bat" or ".cmd"
+                    ext,
+                    Some([46, 98 | 66, 97 | 65, 116 | 84] | [46, 99 | 67, 109 | 77, 100 | 68])
+                )
+            } else {
+                // Case insensitive "ends_with" of UTF-16 encoded ".bat"
+                matches!(ext, Some([46, 98 | 66, 97 | 65, 116 | 84, 0]))
+            }
         };
         let is_batch_file = if path::is_verbatim(&program) {
             has_bat_extension(&program[..program.len() - 1])
@@ -406,7 +437,17 @@ impl Command {
 
         let mut si_ex;
 
-        if let Some(proc_thread_attribute_list) = proc_thread_attribute_list {
+        #[allow(unused)]
+        let mut proc_thread_addributes_supported = true;
+        #[cfg(target_family = "rust9x")]
+        {
+            proc_thread_addributes_supported =
+                c::InitializeProcThreadAttributeList::available().is_some();
+        }
+
+        if let Some(proc_thread_attribute_list) = proc_thread_attribute_list
+            && proc_thread_addributes_supported
+        {
             si.cb = size_of::<c::STARTUPINFOEXW>() as u32;
             flags |= c::EXTENDED_STARTUPINFO_PRESENT;
 
@@ -446,6 +487,7 @@ impl Command {
                 Process {
                     handle: Handle::from_raw_handle(pi.hProcess),
                     main_thread_handle: Handle::from_raw_handle(pi.hThread),
+                    id: pi.dwProcessId,
                 },
                 pipes,
             ))
@@ -654,24 +696,36 @@ impl Stdio {
                 opts.read(stdio_id == c::STD_INPUT_HANDLE);
                 opts.write(stdio_id != c::STD_INPUT_HANDLE);
                 opts.inherit_handle(true);
-                File::open(Path::new(r"\\.\NUL"), &opts).map(|file| file.into_inner()).map_err(
-                    |e| {
-                        // A raw `NotFound` here is easily mistaken for the program
-                        // being missing, so say what actually failed to open.
-                        // `spawn` only passes the three standard ids, but print
-                        // anything else as a number rather than mislabeling it.
-                        let stream = match stdio_id {
-                            c::STD_INPUT_HANDLE => "stdin".to_string(),
-                            c::STD_OUTPUT_HANDLE => "stdout".to_string(),
-                            c::STD_ERROR_HANDLE => "stderr".to_string(),
-                            id => format!("stdio handle {id}"),
+
+                #[rustfmt::skip]
+                let f = cfg_select! {
+                    target_family = "rust9x" => {{
+                        let p = if crate::sys::compat::checks::is_windows_nt() {
+                            r"\\.\NUL"
+                        } else {
+                            r"NUL"
                         };
-                        Error::new(
-                            e.kind(),
-                            format!("failed to open NUL device for child {stream}: {e}"),
-                        )
-                    },
-                )
+                        File::open(Path::new(p), &opts).map(|file| file.into_inner())
+                    }}
+                    _ => File::open(Path::new(r"\\.\NUL"), &opts).map(|file| file.into_inner())
+                };
+
+                f.map_err(|e| {
+                    // A raw `NotFound` here is easily mistaken for the program
+                    // being missing, so say what actually failed to open.
+                    // `spawn` only passes the three standard ids, but print
+                    // anything else as a number rather than mislabeling it.
+                    let stream = match stdio_id {
+                        c::STD_INPUT_HANDLE => "stdin".to_string(),
+                        c::STD_OUTPUT_HANDLE => "stdout".to_string(),
+                        c::STD_ERROR_HANDLE => "stderr".to_string(),
+                        id => format!("stdio handle {id}"),
+                    };
+                    Error::new(
+                        e.kind(),
+                        format!("failed to open NUL device for child {stream}: {e}"),
+                    )
+                })
             }
         }
     }
@@ -719,6 +773,7 @@ impl From<io::Stderr> for Stdio {
 pub struct Process {
     handle: Handle,
     main_thread_handle: Handle,
+    id: u32,
 }
 
 impl Process {
@@ -737,7 +792,7 @@ impl Process {
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { c::GetProcessId(self.handle.as_raw_handle()) }
+        self.id
     }
 
     pub fn main_thread_handle(&self) -> BorrowedHandle<'_> {
@@ -913,10 +968,34 @@ fn make_command_line(argv0: &OsStr, args: &[Arg], force_quotes: bool) -> io::Res
 
 // Get `cmd.exe` for use with bat scripts, encoded as a UTF-16 string.
 fn command_prompt() -> io::Result<Vec<u16>> {
-    let mut system: Vec<u16> =
-        fill_utf16_buf(|buf, size| unsafe { c::GetSystemDirectoryW(buf, size) }, |buf| buf.into())?;
-    system.extend("\\cmd.exe".encode_utf16().chain([0]));
-    Ok(system)
+    #[cfg(target_family = "rust9x")]
+    {
+        if crate::sys::compat::checks::is_windows_nt() {
+            let mut system: Vec<u16> = fill_utf16_buf(
+                |buf, size| unsafe { c::GetSystemDirectoryW(buf, size) },
+                |buf| buf.into(),
+            )?;
+            system.extend("\\cmd.exe".encode_utf16().chain([0]));
+            Ok(system)
+        } else {
+            let mut system: Vec<u16> = fill_utf16_buf(
+                |buf, size| unsafe { c::GetWindowsDirectoryW(buf, size) },
+                |buf| buf.into(),
+            )?;
+            system.extend("\\command.com".encode_utf16().chain([0]));
+            Ok(system)
+        }
+    }
+
+    #[cfg(not(target_family = "rust9x"))]
+    {
+        let mut system: Vec<u16> = fill_utf16_buf(
+            |buf, size| unsafe { c::GetSystemDirectoryW(buf, size) },
+            |buf| buf.into(),
+        )?;
+        system.extend("\\cmd.exe".encode_utf16().chain([0]));
+        Ok(system)
+    }
 }
 
 fn make_envp(maybe_env: Option<BTreeMap<EnvKey, OsString>>) -> io::Result<(*mut c_void, Vec<u16>)> {
@@ -933,8 +1012,19 @@ fn make_envp(maybe_env: Option<BTreeMap<EnvKey, OsString>>) -> io::Result<(*mut 
         }
 
         for (k, v) in env {
-            ensure_no_nuls(k.os_string)?;
-            blk.extend(k.utf16);
+            ensure_no_nuls(&k.os_string)?;
+            cfg_select! {
+                target_family = "rust9x" => {
+                    if c::CompareStringOrdinal::available().is_none() {
+                        blk.extend(k.os_string.encode_wide());
+                    } else {
+                        blk.extend(k.utf16);
+                    }
+                }
+                _ => {
+                    blk.extend(k.utf16);
+                }
+            };
             blk.push('=' as u16);
             blk.extend(ensure_no_nuls(v)?.encode_wide());
             blk.push(0);

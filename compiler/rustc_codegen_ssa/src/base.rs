@@ -26,6 +26,7 @@ use rustc_middle::mir::interpret::{CTFE_ALLOC_SALT, ErrorHandled, Scalar};
 use rustc_middle::mir::{BinOp, ConstValue};
 use rustc_middle::mono::{CodegenUnit, CodegenUnitNameBuilder, MonoItem, MonoItemPartitions};
 use rustc_middle::query::Providers;
+use rustc_middle::ty::consts::ConstExt;
 use rustc_middle::ty::layout::{HasTyCtxt, HasTypingEnv, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, PatternKind, Ty, TyCtxt, UintTy, Unnormalized};
 use rustc_session::config::{self, EntryFnType};
@@ -877,6 +878,10 @@ pub fn codegen_crate<
                         source: cgu.previous_work_product(tcx),
                     },
                 );
+                // This will unwind if there are errors, which triggers our `AbortCodegenOnDrop`
+                // guard. Unfortunately, just skipping the `submit_pre_lto_module_to_llvm` makes
+                // compilation hang on post-monomorphization errors.
+                tcx.dcx().abort_if_errors();
             }
             CguReuse::PostLto => {
                 submit_post_lto_module_to_llvm(

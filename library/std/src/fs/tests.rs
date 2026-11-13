@@ -2522,7 +2522,7 @@ fn windows_unix_socket_exists() {
     // std doesn't currently support Unix sockets on Windows so manually create one here.
     net::init();
     unsafe {
-        let socket = c::WSASocketW(
+        let socket = c::WSASocketA(
             c::AF_UNIX as i32,
             c::SOCK_STREAM,
             0,
@@ -3069,6 +3069,16 @@ fn test_dir_remove_dir() {
     let dir = check!(Dir::open(tmpdir.path()));
     check!(dir.remove_dir("foo"));
     assert!(!matches!(exists(tmpdir.join("foo")), Ok(true)));
+}
+
+#[test]
+fn test_dir_rename_dir() {
+    let tmpdir = tmpdir();
+    check!(fs::create_dir(tmpdir.join("foo")));
+    let dir = check!(Dir::open(tmpdir.path()));
+    check!(dir.rename("foo", &dir, "baz"));
+    let m = check!(tmpdir.join("baz").metadata());
+    assert!(m.is_dir());
 }
 
 #[test]

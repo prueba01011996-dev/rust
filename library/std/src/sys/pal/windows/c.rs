@@ -5,7 +5,8 @@
 #![unstable(issue = "none", feature = "windows_c")]
 #![allow(clippy::style)]
 
-use core::ffi::{CStr, c_int, c_uint, c_ulong, c_ushort, c_void};
+#[allow(unused_imports)]
+use core::ffi::{c_int, c_uint, c_ulong, c_ushort, c_void};
 use core::ptr;
 
 // Unused items in windows_sys are expected.
@@ -15,6 +16,11 @@ use core::ptr;
 #[allow(unused)]
 mod windows_sys;
 pub use windows_sys::*;
+
+#[cfg(target_family = "rust9x")]
+pub(crate) mod fileextd;
+#[cfg(target_family = "rust9x")]
+pub(crate) mod wspiapi;
 
 pub type WCHAR = u16;
 
@@ -52,15 +58,17 @@ pub const FILE_READ_ATTRIBUTES: u32 = cu(windows_sys::FILE_READ_ATTRIBUTES);
 pub const FILE_WRITE_ATTRIBUTES: u32 = cu(windows_sys::FILE_WRITE_ATTRIBUTES);
 pub const FILE_TRAVERSE: u32 = cu(windows_sys::FILE_TRAVERSE);
 pub const TIMER_ALL_ACCESS: u32 = cu(windows_sys::TIMER_ALL_ACCESS);
-#[cfg(target_vendor = "win7")]
+#[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
 pub const TOKEN_READ: u32 = cu(windows_sys::TOKEN_READ);
 
 // dwOptions -- DuplicateHandle
 pub const DUPLICATE_SAME_ACCESS: u32 = cu(windows_sys::DUPLICATE_SAME_ACCESS);
 
 // dwFlags -- GetModuleHandleEx
+#[cfg(not(target_family = "rust9x"))]
 pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u32 =
     cu(windows_sys::GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS);
+#[cfg(not(target_family = "rust9x"))]
 pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: u32 =
     cu(windows_sys::GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT);
 
@@ -145,9 +153,11 @@ pub const STACK_SIZE_PARAM_IS_A_RESERVATION: u32 =
     cu(windows_sys::STACK_SIZE_PARAM_IS_A_RESERVATION);
 
 // dwFlags -- WideCharToMultiByte
+#[cfg(not(target_family = "rust9x"))]
 pub const WC_ERR_INVALID_CHARS: u32 = cu(windows_sys::WC_ERR_INVALID_CHARS);
 
 // dwFlags -- MultiByteToWideChar
+#[cfg(not(target_family = "rust9x"))]
 pub const MB_ERR_INVALID_CHARS: u32 = cu(windows_sys::MB_ERR_INVALID_CHARS);
 
 // dwFlags -- CreateWaitableTimerExW
@@ -189,6 +199,7 @@ pub const FSCTL_SET_REPARSE_POINT: u32 = cu(windows_sys::FSCTL_SET_REPARSE_POINT
 pub const FILE_TYPE_PIPE: u32 = cu(windows_sys::FILE_TYPE_PIPE);
 
 // GetACP return value (UINT)
+#[cfg(not(target_family = "rust9x"))]
 pub const CP_UTF8: u32 = windows_sys::CP_UTF8.cast_unsigned();
 
 // WaitForSingleObject return value (DWORD)
@@ -267,11 +278,11 @@ pub const AF_INET: ADDRESS_FAMILY = windows_sys::AF_INET as ADDRESS_FAMILY;
 pub const AF_INET6: ADDRESS_FAMILY = windows_sys::AF_INET6 as ADDRESS_FAMILY;
 pub const AF_UNIX: ADDRESS_FAMILY = windows_sys::AF_UNIX as ADDRESS_FAMILY;
 
-#[cfg(target_vendor = "win7")]
+#[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
 pub const CONDITION_VARIABLE_INIT: CONDITION_VARIABLE = CONDITION_VARIABLE { Ptr: ptr::null_mut() };
-#[cfg(target_vendor = "win7")]
+#[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
 pub const SRWLOCK_INIT: SRWLOCK = SRWLOCK { Ptr: ptr::null_mut() };
-#[cfg(not(target_thread_local))]
+#[cfg(all(not(target_thread_local), not(target_family = "rust9x")))]
 pub const INIT_ONCE_STATIC_INIT: INIT_ONCE = INIT_ONCE { Ptr: ptr::null_mut() };
 
 // Equivalent to the `NT_SUCCESS` C preprocessor macro.
@@ -342,7 +353,7 @@ pub struct MOUNT_POINT_REPARSE_BUFFER {
 pub const EXCEPTION_CONTINUE_SEARCH: i32 = 0;
 
 // Use raw-dylib to import ProcessPrng as we can't rely on there being an import library.
-#[cfg(not(target_vendor = "win7"))]
+#[cfg(not(any(target_vendor = "win7", target_family = "rust9x")))]
 #[cfg_attr(
     target_arch = "x86",
     link(name = "bcryptprimitives", kind = "raw-dylib", import_name_type = "undecorated")
@@ -352,27 +363,55 @@ unsafe extern "system" {
     pub fn ProcessPrng(pbdata: *mut u8, cbdata: usize) -> BOOL;
 }
 
-windows_link::link!("ntdll.dll" "system" fn NtCreateNamedPipeFile(
-    filehandle: *mut HANDLE,
-    desiredaccess: u32,
-    objectattributes: *const OBJECT_ATTRIBUTES,
-    iostatusblock: *mut IO_STATUS_BLOCK,
-    shareaccess: u32,
-    createdisposition: u32,
-    createoptions: u32,
-    namedpipetype: u32,
-    readmode: u32,
-    completionmode: u32,
-    maximuminstances: u32,
-    inboundquota: u32,
-    outboundquota: u32,
-    defaulttimeout: *const u64,
-) -> NTSTATUS);
+cfg_select! {
+    target_family = "rust9x" => {
+        compat_fn_with_fallback! {
+            pub static NTDLL: &CStr = c"ntdll" => { load: false, unicows: false };
+            // NT only (duh)
+            pub fn NtCreateNamedPipeFile(
+                filehandle: *mut HANDLE,
+                desiredaccess: u32,
+                objectattributes: *const OBJECT_ATTRIBUTES,
+                iostatusblock: *mut IO_STATUS_BLOCK,
+                shareaccess: u32,
+                createdisposition: u32,
+                createoptions: u32,
+                namedpipetype: u32,
+                readmode: u32,
+                completionmode: u32,
+                maximuminstances: u32,
+                inboundquota: u32,
+                outboundquota: u32,
+                defaulttimeout: *const u64,
+            ) -> NTSTATUS {
+                rtabort!("unimplemented")
+            }
+        }
+    }
+    _ => {
+        windows_link::link!("ntdll.dll" "system" fn NtCreateNamedPipeFile(
+            filehandle: *mut HANDLE,
+            desiredaccess: u32,
+            objectattributes: *const OBJECT_ATTRIBUTES,
+            iostatusblock: *mut IO_STATUS_BLOCK,
+            shareaccess: u32,
+            createdisposition: u32,
+            createoptions: u32,
+            namedpipetype: u32,
+            readmode: u32,
+            completionmode: u32,
+            maximuminstances: u32,
+            inboundquota: u32,
+            outboundquota: u32,
+            defaulttimeout: *const u64,
+        ) -> NTSTATUS);
+    }
+}
 
 // Functions that aren't available on every version of Windows that we support,
 // but we still use them and just provide some form of a fallback implementation.
 compat_fn_with_fallback! {
-    pub static KERNEL32: &CStr = c"kernel32";
+    pub static KERNEL32: &CStr = c"kernel32" => { load: false, unicows: false };
 
     // >= Win10 1607
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreaddescription
@@ -388,7 +427,7 @@ compat_fn_with_fallback! {
 
     // >= Win8 / Server 2012
     // https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemtimepreciseasfiletime
-    #[cfg(target_vendor = "win7")]
+    #[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
     pub fn GetSystemTimePreciseAsFileTime(lpsystemtimeasfiletime: *mut FILETIME) -> () {
         unsafe { GetSystemTimeAsFileTime(lpsystemtimeasfiletime) }
     }
@@ -412,36 +451,56 @@ compat_fn_optional! {
     pub fn WakeByAddressSingle(address: *const c_void);
 }
 
-#[cfg(any(target_vendor = "win7"))]
+#[cfg(target_family = "rust9x")]
 compat_fn_with_fallback! {
-    pub static NTDLL: &CStr = c"ntdll";
+    pub static SYNCH: &CStr = c"api-ms-win-core-synch-l1-2-0" => { load: true, unicows: false };
 
-    #[cfg(target_vendor = "win7")]
+    pub fn WaitOnAddress(
+        address: *const c_void,
+        compareaddress: *const c_void,
+        addresssize: usize,
+        dwmilliseconds: u32
+    ) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    pub fn WakeByAddressSingle(address: *const c_void) {
+        rtabort!("unimplemented")
+    }
+    pub fn WakeByAddressAll(address: *const c_void) {
+        rtabort!("unimplemented")
+    }
+}
+
+#[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
+compat_fn_with_fallback! {
+    pub static NTDLL: &CStr = c"ntdll" => { load: false, unicows: false };
+
+    #[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
     pub fn NtCreateKeyedEvent(
         KeyedEventHandle: *mut HANDLE,
         DesiredAccess: u32,
         ObjectAttributes: *mut c_void,
         Flags: u32
     ) -> NTSTATUS {
-        panic!("keyed events not available")
+        rtabort!("unimplemented")
     }
-    #[cfg(target_vendor = "win7")]
+    #[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
     pub fn NtReleaseKeyedEvent(
         EventHandle: HANDLE,
         Key: *const c_void,
         Alertable: bool,
         Timeout: *mut i64
     ) -> NTSTATUS {
-        panic!("keyed events not available")
+        rtabort!("unimplemented")
     }
-    #[cfg(target_vendor = "win7")]
+    #[cfg(any(target_vendor = "win7", target_family = "rust9x"))]
     pub fn NtWaitForKeyedEvent(
         EventHandle: HANDLE,
         Key: *const c_void,
         Alertable: bool,
         Timeout: *mut i64
     ) -> NTSTATUS {
-        panic!("keyed events not available")
+        rtabort!("unimplemented")
     }
 }
 
@@ -453,9 +512,508 @@ cfg_select! {
         windows_link::link_raw_dylib!("ntdll.dll" "system" fn NtWriteFile(filehandle : HANDLE, event : HANDLE, apcroutine : PIO_APC_ROUTINE, apccontext : *const core::ffi::c_void, iostatusblock : *mut IO_STATUS_BLOCK, buffer : *const core::ffi::c_void, length : u32, byteoffset : *const i64, key : *const u32) -> NTSTATUS);
         windows_link::link_raw_dylib!("ntdll.dll" "system" fn RtlNtStatusToDosError(status : NTSTATUS) -> u32);
     }
+    target_family = "rust9x" => {
+        compat_fn_with_fallback! {
+            pub static NTDLL: &CStr = c"ntdll" => { load: false, unicows: false };
+
+            pub fn NtCreateFile(
+                filehandle: *mut HANDLE,
+                desiredaccess: u32,
+                objectattributes: *const OBJECT_ATTRIBUTES,
+                iostatusblock: *mut IO_STATUS_BLOCK,
+                allocationsize: *const i64,
+                fileattributes: u32,
+                shareaccess: u32,
+                createdisposition: u32,
+                createoptions: u32,
+                eabuffer: *const core::ffi::c_void,
+                ealength: u32
+            ) -> NTSTATUS {
+                // used in Dir::* functions
+                STATUS_NOT_IMPLEMENTED
+            }
+
+            pub fn NtReadFile(
+                filehandle: HANDLE,
+                event: HANDLE,
+                apcroutine: PIO_APC_ROUTINE,
+                apccontext: *const c_void,
+                iostatusblock: *mut IO_STATUS_BLOCK,
+                buffer: *mut c_void,
+                length: u32,
+                byteoffset: *const i64,
+                key: *const u32
+            ) -> NTSTATUS {
+                rtabort!("unimplemented")
+            }
+            pub fn NtWriteFile(
+                filehandle: HANDLE,
+                event: HANDLE,
+                apcroutine: PIO_APC_ROUTINE,
+                apccontext: *const c_void,
+                iostatusblock: *mut IO_STATUS_BLOCK,
+                buffer: *const c_void,
+                length: u32,
+                byteoffset: *const i64,
+                key: *const u32
+            ) -> NTSTATUS {
+                rtabort!("unimplemented")
+            }
+            pub fn RtlNtStatusToDosError(Status: NTSTATUS) -> u32 {
+                ERROR_CALL_NOT_IMPLEMENTED
+            }
+            pub fn NtOpenFile(
+                filehandle: *mut HANDLE,
+                desiredaccess: u32,
+                objectattributes: *const OBJECT_ATTRIBUTES,
+                iostatusblock: *mut IO_STATUS_BLOCK,
+                shareaccess: u32,
+                openoptions: u32
+            ) -> NTSTATUS {
+                rtabort!("unimplemented")
+            }
+        }
+    }
     _ => {}
 }
 
+// only needed for the new fiber-based thread local cleanup code, which is not used by rust9x
+#[cfg(not(target_family = "rust9x"))]
 unsafe extern "C" {
     pub fn atexit(cb: unsafe extern "C" fn()) -> c_int;
+}
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static KERNEL32: &CStr = c"kernel32" => { load: false, unicows: false };
+    // >= NT 4
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-signalobjectandwait
+    pub fn SignalObjectAndWait(
+        hobjecttosignal: HANDLE,
+        hobjecttowaiton: HANDLE,
+        dwmilliseconds: u32,
+        balertable: BOOL
+    ) -> u32 { rtabort!("unimplemented") }
+    // >= NT 4
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-tryentercriticalsection
+    pub fn TryEnterCriticalSection(lpcriticalsection: *mut CRITICAL_SECTION) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    // >= Win7 / Server 2008 R2
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-tryacquiresrwlockexclusive
+    pub fn TryAcquireSRWLockExclusive(srwlock: *mut SRWLOCK) -> bool { rtabort!("unimplemented") }
+    pub fn TryAcquireSRWLockShared(srwlock: *mut SRWLOCK) -> bool { rtabort!("unimplemented") }
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-acquiresrwlockexclusive
+    pub fn AcquireSRWLockExclusive(srwlock: *mut SRWLOCK) -> () { rtabort!("unimplemented") }
+    pub fn AcquireSRWLockShared(srwlock: *mut SRWLOCK) -> () { rtabort!("unimplemented") }
+    pub fn ReleaseSRWLockExclusive(srwlock: *mut SRWLOCK) -> () { rtabort!("unimplemented") }
+    pub fn ReleaseSRWLockShared(srwlock: *mut SRWLOCK) -> () { rtabort!("unimplemented") }
+    pub fn SleepConditionVariableSRW(
+        conditionvariable: *mut CONDITION_VARIABLE,
+        srwlock: *mut SRWLOCK,
+        dwmilliseconds: u32,
+        flags: u32,
+    ) -> BOOL { rtabort!("unimplemented") }
+    pub fn WakeAllConditionVariable(conditionvariable: *mut CONDITION_VARIABLE) -> () {
+        rtabort!("unimplemented")
+    }
+    pub fn WakeConditionVariable(conditionvariable: *mut CONDITION_VARIABLE) -> () {
+        rtabort!("unimplemented")
+    }
+
+    // >= XP
+    // https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-addvectoredexceptionhandler
+    pub fn AddVectoredExceptionHandler(
+        first: u32,
+        handler: PVECTORED_EXCEPTION_HANDLER
+    ) -> *mut core::ffi::c_void {
+        core::ptr::null_mut()
+    }
+    // >= Vista / Server 2003 SP1 / XPx64
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadstackguarantee
+    pub fn SetThreadStackGuarantee(stacksizeinbytes: *mut u32) -> BOOL {
+        TRUE
+    }
+
+    // >= 95 / NT 3.5
+    // https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemtimeasfiletime
+    pub fn GetSystemTimeAsFileTime(lpSystemTimeAsFileTime: *mut FILETIME) {
+        unsafe {
+            // implementation based on old MSDN docs
+            let mut st: SYSTEMTIME = crate::mem::zeroed();
+            GetSystemTime(&mut st);
+            crate::sys::cvt(SystemTimeToFileTime(&st, lpSystemTimeAsFileTime)).unwrap();
+        }
+    }
+    // >= NT 4
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-switchtothread
+    pub fn SwitchToThread() -> BOOL {
+        unsafe { Sleep(0); }
+        TRUE
+    }
+
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createwaitabletimerexw
+    pub fn CreateWaitableTimerExW(
+        lptimerattributes: *const SECURITY_ATTRIBUTES,
+        lptimername: PCWSTR,
+        dwflags: u32,
+        dwdesiredaccess: u32
+    ) -> HANDLE {
+        ptr::null_mut()
+    }
+
+    // >= 98 / NT 4
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-setwaitabletimer
+    pub fn SetWaitableTimer(htimer: HANDLE,
+        lpduetime: *const i64,
+        lperiod: i32,
+        pfncompletionroutine: PTIMERAPCROUTINE,
+        lpargtocompletionroutine: *const core::ffi::c_void,
+        fresume: BOOL
+    ) -> BOOL {
+        rtabort!("unimplemented")
+    }
+
+    // >= 2000
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfilepointerex
+    pub fn SetFilePointerEx(
+        hfile: HANDLE,
+        lidistancetomove: i64,
+        lpnewfilepointer: *mut i64,
+        dwmovemethod: u32,
+    ) -> BOOL {
+        unsafe {
+            let distance_low = lidistancetomove as i32;
+            let mut distance_high = (lidistancetomove >> 32) as i32;
+
+            let new_pos_low = SetFilePointer(hfile, distance_low, &mut distance_high, dwmovemethod);
+
+            // since (-1 as u32) could be a valid value for the lower 32 bits of the new file
+            // pointer position, a call to GetLastError is needed to actually see if it failed
+            if new_pos_low == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR as u32 {
+                return FALSE;
+            }
+
+            if !lpnewfilepointer.is_null() {
+                *lpnewfilepointer = (distance_high as i64) << 32 | (new_pos_low as i64);
+            }
+
+            TRUE
+        }
+    }
+
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createsymboliclinkw
+    pub fn CreateSymbolicLinkW(
+        lpsymlinkfilename: PCWSTR,
+        lptargetfilename: PCWSTR,
+        dwflags: u32,
+    ) -> bool {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        false
+    }
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew
+    pub fn GetFinalPathNameByHandleW(
+        hfile: HANDLE,
+        lpszfilepath: PWSTR,
+        cchfilepath: u32,
+        dwflags: u32
+    ) -> u32 {
+        rtabort!("unimplemented")
+    }
+    // >= 98 / NT 3.1
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-querydosdevicew
+    // Only used by the `canonicalize` fallback, which requires `GetFinalPathNameByHandleW` anyway.
+    pub fn QueryDosDeviceW(lpdevicename: PCWSTR, lptargetpath: PWSTR, ucchmax: u32) -> u32 {
+        rtabort!("unimplemented")
+    }
+    // >= 2000
+    // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createhardlinkw
+    pub fn CreateHardLinkW(
+        lpfilename: PCWSTR,
+        lpexistingfilename: PCWSTR,
+        lpsecurityattributes: *const SECURITY_ATTRIBUTES,
+    ) -> BOOL {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        FALSE
+    }
+
+    // >= NT 3.51+
+    // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-sethandleinformation
+    pub fn SetHandleInformation(hobject: HANDLE, dwmask: u32, dwflags: u32) -> BOOL {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        FALSE
+    }
+
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-initializeprocthreadattributelist
+    pub fn InitializeProcThreadAttributeList(
+        lpattributelist: LPPROC_THREAD_ATTRIBUTE_LIST,
+        dwattributecount: u32,
+        dwflags: u32,
+        lpsize: *mut usize
+    ) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    // >= Vista / Server 2008
+    pub fn UpdateProcThreadAttribute(
+        lpattributelist: LPPROC_THREAD_ATTRIBUTE_LIST,
+        dwflags: u32,
+        attribute: usize,
+        lpvalue: *const core::ffi::c_void,
+        cbsize: usize,
+        lppreviousvalue: *mut core::ffi::c_void,
+        lpreturnsize: *const usize
+    ) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    // >= Vista / Server 2008
+    pub fn DeleteProcThreadAttributeList(lpattributelist: LPPROC_THREAD_ATTRIBUTE_LIST) {
+        rtabort!("unimplemented")
+    }
+
+    // >= Vista / Server 2008
+    // https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal
+    pub fn CompareStringOrdinal(
+        lpstring1: PCWSTR,
+        cchcount1: i32,
+        lpstring2: PCWSTR,
+        cchcount2: i32,
+        bignorecase: BOOL,
+    ) -> i32 {
+        rtabort!("unimplemented")
+    }
+
+    // >= 98+, NT4.0
+    // https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal
+    pub fn CancelIo(hfile: HANDLE) -> BOOL {
+        rtabort!("unimplemented")
+    }
+
+    // >= NT
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex
+    pub fn LockFileEx(
+        hfile: HANDLE,
+        dwflags: u32,
+        dwreserved: u32,
+        nnumberofbytestolocklow: u32,
+        nnumberofbytestolockhigh: u32,
+        lpoverlapped: *mut OVERLAPPED
+    ) -> BOOL {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        FALSE
+    }
+
+    // >= 2000
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
+    pub fn GetFileSizeEx(
+        hfile: HANDLE,
+        lpfilesize: *mut i64
+    ) -> BOOL {
+        if lpfilesize.is_null() {
+            unsafe { SetLastError(ERROR_INVALID_PARAMETER as u32) };
+            return FALSE;
+        }
+        let mut high32 = 0;
+        let low32 = unsafe { GetFileSize(hfile, &mut high32) };
+        let full_size: u64 = ((high32 as u64) << 32) | (low32 as u64);
+        if low32 == INVALID_FILE_SIZE && unsafe { GetLastError() } != NO_ERROR as u32 {
+            FALSE
+        } else {
+            unsafe { *lpfilesize = full_size as i64 };
+            TRUE
+        }
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static advapi32: &CStr = c"advapi32" => { load: true, unicows: false };
+    // >= XP / Server 2003
+    // https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-rtlgenrandom
+    pub fn SystemFunction036(
+        randombuffer: *mut core::ffi::c_void,
+        randombufferlength: u32
+    ) -> bool {
+        rtabort!("unimplemented")
+    }
+
+    // >= NT 4.0 / Windows 95 OSR2 / Windows 95 with IE 3.02
+    // https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptacquirecontexta
+    pub fn CryptAcquireContextA(
+        phprov: *mut usize,
+        szcontainer: PCSTR,
+        szprovider: PCSTR,
+        dwprovtype: u32,
+        dwflags: u32
+    ) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    pub fn CryptReleaseContext(hprov: usize, dwflags: u32) -> BOOL {
+        rtabort!("unimplemented")
+    }
+    pub fn CryptGenRandom(hprov: usize, dwlen: u32, pbbuffer: *mut u8) -> BOOL {
+        rtabort!("unimplemented")
+    }
+}
+#[cfg(target_family = "rust9x")]
+pub use self::SystemFunction036 as RtlGenRandom;
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static userenv: &CStr = c"userenv" => { load: true, unicows: false };
+    // >= NT 4.0
+    // https://learn.microsoft.com/en-us/windows/win32/api/userenv/nf-userenv-getuserprofiledirectoryw
+    pub fn GetUserProfileDirectoryW(
+        htoken: HANDLE,
+        lpprofiledir: PWSTR,
+        lpcchsize: *mut u32
+    ) -> BOOL {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        FALSE
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static advapi32: &CStr = c"advapi32" => { load: true, unicows: false };
+    // >= NT
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
+    pub fn OpenProcessToken(
+        processhandle: HANDLE,
+        desiredaccess: u32,
+        tokenhandle: *mut HANDLE
+    ) -> BOOL {
+        unsafe { SetLastError(ERROR_CALL_NOT_IMPLEMENTED as u32); };
+        FALSE
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+mod ws2_32 {
+    use super::*;
+    compat_fn_with_fallback! {
+        pub static WS2_32: &CStr = c"ws2_32" => { load: true, unicows: false };
+
+        // >= NT4/2000 with IPv6 Tech Preview
+        // https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo
+        pub fn getaddrinfo(
+            pnodename: PCSTR,
+            pservicename: PCSTR,
+            phints: *const ADDRINFOA,
+            ppresult: *mut *mut ADDRINFOA,
+        ) -> i32 {
+            unsafe { wship6::getaddrinfo(pnodename, pservicename, phints, ppresult) }
+        }
+        // >= NT4/2000 with IPv6 Tech Preview
+        pub fn freeaddrinfo(paddrinfo: *const ADDRINFOA) -> () {
+            unsafe { wship6::freeaddrinfo(paddrinfo) }
+        }
+        pub fn GetHostNameW(name: PWSTR, namelen: i32) -> i32 {
+            rtabort!("unimplemented")
+        }
+    }
+}
+#[cfg(target_family = "rust9x")]
+pub use ws2_32::{GetHostNameW, freeaddrinfo, getaddrinfo};
+
+#[cfg(target_family = "rust9x")]
+mod wship6 {
+    use super::wspiapi::{wspiapi_freeaddrinfo, wspiapi_getaddrinfo};
+    use super::{ADDRINFOA, PCSTR};
+
+    compat_fn_with_fallback! {
+        pub static WSHIP6: &CStr = c"wship6" => { load: true, unicows: false };
+
+        // >= 2000 with IPv6 Tech Preview
+        pub fn getaddrinfo(
+            pnodename: PCSTR,
+            pservicename: PCSTR,
+            phints: *const ADDRINFOA,
+            ppresult: *mut *mut ADDRINFOA,
+        ) -> i32 {
+            unsafe { wspiapi_getaddrinfo(pnodename, pservicename, phints, ppresult) }
+        }
+        // >= 2000 with IPv6 Tech Preview
+        pub fn freeaddrinfo(paddrinfo: *const ADDRINFOA)-> () {
+            unsafe { wspiapi_freeaddrinfo(paddrinfo) }
+        }
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static KERNEL32: &CStr = c"kernel32" => { load: false, unicows: true };
+    // >= NT 3.5+, 95+
+    // https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-freeenvironmentstringsw
+    pub fn FreeEnvironmentStringsW(penv: PCWSTR) -> BOOL {
+        // do nothing on NT 3.1 -- it is just a pointer into the PEB
+        TRUE
+    }
+
+    // >= NT 3.5+, 95+
+    // https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getenvironmentstringsw
+    pub fn GetEnvironmentStringsW() -> PWSTR {
+        unsafe { GetEnvironmentStrings() as PWSTR }
+    }
+
+    // _only_ on NT 3.1. Equivalent to GetEnvironmentStringsA, as it is in the ACP, not Unicode...
+    pub fn GetEnvironmentStrings() -> PCSTR {
+        rtabort!("unimplemented")
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+pub(crate) use fileextd::{
+    get_file_information_by_handle_ex as GetFileInformationByHandleEx,
+    set_file_information_by_handle as SetFileInformationByHandle,
+};
+
+#[cfg(target_family = "rust9x")]
+compat_fn_with_fallback! {
+    pub static NTDLL: &CStr = c"ntdll" => { load: false, unicows: false };
+    // all NT only
+    fn NtQueryDirectoryFile(
+        filehandle: HANDLE,
+        event: HANDLE,
+        apcroutine: PIO_APC_ROUTINE,
+        apccontext: *const core::ffi::c_void,
+        iostatusblock: *mut IO_STATUS_BLOCK,
+        fileinformation: *mut core::ffi::c_void,
+        length: u32,
+        fileinformationclass: FILE_INFORMATION_CLASS,
+        returnsingleentry: bool,
+        filename: *const UNICODE_STRING,
+        restartscan: bool
+    ) -> NTSTATUS {
+        rtabort!("unimplemented")
+    }
+    fn NtQueryInformationFile(
+        filehandle: HANDLE,
+        iostatusblock: *mut IO_STATUS_BLOCK,
+        fileinformation: *mut core::ffi::c_void,
+        length: u32,
+        fileinformationclass: FILE_INFORMATION_CLASS
+    ) -> NTSTATUS {
+        rtabort!("unimplemented")
+    }
+    pub fn NtSetInformationFile(
+        filehandle: HANDLE,
+        iostatusblock: *mut IO_STATUS_BLOCK,
+        fileinformation: *const core::ffi::c_void,
+        length: u32,
+        fileinformationclass: FILE_INFORMATION_CLASS
+    ) -> NTSTATUS {
+        rtabort!("unimplemented")
+    }
+    fn NtWaitForSingleObject(
+        handle: HANDLE,
+        alertable: bool,
+        timeout: *mut i64
+    ) -> NTSTATUS {
+        rtabort!("unimplemented")
+    }
 }

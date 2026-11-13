@@ -136,9 +136,9 @@ impl Iterator for ReadDir {
             }
         }
         unsafe {
-            let mut wfd = mem::zeroed();
+            let mut wfd = MaybeUninit::uninit();
             loop {
-                if c::FindNextFileW(handle.0, &mut wfd) == 0 {
+                if c::FindNextFileW(handle.0, wfd.as_mut_ptr()) == 0 {
                     self.handle = None;
                     match api::get_last_error() {
                         WinError::NO_MORE_FILES => return None,
@@ -147,7 +147,7 @@ impl Iterator for ReadDir {
                         }
                     }
                 }
-                if let Some(e) = DirEntry::new(&self.root, &wfd) {
+                if let Some(e) = DirEntry::new(&self.root, &wfd.assume_init_ref()) {
                     return Some(Ok(e));
                 }
             }
@@ -195,6 +195,7 @@ impl DirEntry {
 }
 
 impl OpenOptions {
+    #[cfg(not(target_family = "rust9x"))]
     pub fn new() -> OpenOptions {
         OpenOptions {
             // generic
@@ -208,6 +209,33 @@ impl OpenOptions {
             custom_flags: 0,
             access_mode: None,
             share_mode: c::FILE_SHARE_READ | c::FILE_SHARE_WRITE | c::FILE_SHARE_DELETE,
+            attributes: 0,
+            security_qos_flags: 0,
+            inherit_handle: false,
+            freeze_last_access_time: false,
+            freeze_last_write_time: false,
+        }
+    }
+
+    #[cfg(target_family = "rust9x")]
+    pub fn new() -> OpenOptions {
+        OpenOptions {
+            // generic
+            read: false,
+            write: false,
+            append: false,
+            truncate: false,
+            create: false,
+            create_new: false,
+            // system-specific
+            custom_flags: 0,
+            access_mode: None,
+            share_mode: if crate::sys::compat::checks::is_windows_nt() {
+                c::FILE_SHARE_READ | c::FILE_SHARE_WRITE | c::FILE_SHARE_DELETE
+            } else {
+                // _DELETE is only supported on NT-based systems.
+                c::FILE_SHARE_READ | c::FILE_SHARE_WRITE
+            },
             attributes: 0,
             security_qos_flags: 0,
             inherit_handle: false,
@@ -262,6 +290,7 @@ impl OpenOptions {
         self.freeze_last_write_time = freeze;
     }
 
+    #[cfg(not(target_family = "rust9x"))]
     fn get_access_mode(&self) -> io::Result<u32> {
         if let Some(access) = self.access_mode {
             return Ok(access);
@@ -269,12 +298,12 @@ impl OpenOptions {
 
         match (self.read, self.write, self.append) {
             (_, false, false) if self.truncate || self.create || self.create_new => {
-                Err(io::Error::new(
+                Err(io::const_error!(
                     io::ErrorKind::InvalidInput,
                     "creating or truncating a file requires write or append access",
                 ))
             }
-            (_, _, true) if self.truncate && !self.create_new => Err(io::Error::new(
+            (_, _, true) if self.truncate && !self.create_new => Err(io::const_error!(
                 io::ErrorKind::InvalidInput,
                 "append and truncate cannot both be enabled",
             )),
@@ -283,7 +312,50 @@ impl OpenOptions {
             (true, true, false) => Ok(c::GENERIC_READ | c::GENERIC_WRITE),
             (false, _, true) => Ok(c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA),
             (true, _, true) => Ok(c::GENERIC_READ | (c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA)),
-            (false, false, false) => Err(io::Error::new(
+            (false, false, false) => Err(io::const_error!(
+                io::ErrorKind::InvalidInput,
+                "must specify at least one of read, write, or append access",
+            )),
+        }
+    }
+
+    #[cfg(target_family = "rust9x")]
+    fn get_access_mode(&self) -> io::Result<u32> {
+        // 9x/ME only supports a limited number of access rights (DELETE, FILE_WRITE_ATTRIBUTES,
+        // GENERIC_READ, and GENERIC_WRITE). This means that we can't use the special append-only
+        // behavior (atomic appends). Additionally, files opened with `append(true)` *will* be able
+        // to seek back and overwrite existing data on these systems.
+        let is_nt = crate::sys::compat::checks::is_windows_nt();
+
+        if let Some(access) = self.access_mode {
+            return Ok(access);
+        }
+
+        match (self.read, self.write, self.append) {
+            (_, false, false) if self.truncate || self.create || self.create_new => {
+                Err(io::const_error!(
+                    io::ErrorKind::InvalidInput,
+                    "creating or truncating a file requires write or append access",
+                ))
+            }
+            (_, _, true) if self.truncate && !self.create_new => Err(io::const_error!(
+                io::ErrorKind::InvalidInput,
+                "append and truncate cannot both be enabled",
+            )),
+            (true, false, false) => Ok(c::GENERIC_READ),
+            (false, true, false) => Ok(c::GENERIC_WRITE),
+            (true, true, false) => Ok(c::GENERIC_READ | c::GENERIC_WRITE),
+            (false, _, true) => Ok(if is_nt {
+                c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA
+            } else {
+                c::GENERIC_WRITE
+            }),
+            (true, _, true) => Ok(if is_nt {
+                c::GENERIC_READ | (c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA)
+            } else {
+                c::GENERIC_READ | c::GENERIC_WRITE
+            }),
+            (false, false, false) => Err(io::const_error!(
                 io::ErrorKind::InvalidInput,
                 "must specify at least one of read, write, or append access",
             )),
@@ -326,7 +398,7 @@ impl File {
         Self::open_native(path, opts)
     }
 
-    fn open_native(path: &WCStr, opts: &OpenOptions) -> io::Result<File> {
+    pub(crate) fn open_native(path: &WCStr, opts: &OpenOptions) -> io::Result<File> {
         let creation = opts.get_creation_mode()?;
         let sa = c::SECURITY_ATTRIBUTES {
             nLength: size_of::<c::SECURITY_ATTRIBUTES>() as u32,
@@ -369,13 +441,21 @@ impl File {
                 // remove the fallback.
                 let alloc = c::FILE_ALLOCATION_INFO { AllocationSize: 0 };
                 set_file_information_by_handle(handle.as_raw_handle(), &alloc)
-                    .or_else(|_| {
-                        let eof = c::FILE_END_OF_FILE_INFO { EndOfFile: 0 };
-                        set_file_information_by_handle(handle.as_raw_handle(), &eof)
-                    })
-                    .io_result()?;
+                    .io_result()
+                    .or_else(|_| Self::truncate_inner(handle.as_raw_handle(), 0))?;
             }
-            Ok(File { handle: Handle::from_inner(handle) })
+            let file = File { handle: Handle::from_inner(handle) };
+
+            // 9x/Me and NT3.5 and older do not support FILE_APPEND_DATA/FILE_WRITE_DATA, which
+            // means that we cannot get the append-only behaviors: atomic appends, cursor starts at
+            // the end of the file. The latter can be emulated, at least, by just seeking to the
+            // end.
+            #[cfg(target_family = "rust9x")]
+            if opts.append && !crate::sys::compat::checks::supports_file_atomic_append() {
+                file.seek(SeekFrom::End(0))?;
+            }
+
+            Ok(file)
         } else {
             Err(Error::last_os_error())
         }
@@ -393,7 +473,7 @@ impl File {
     fn acquire_lock(&self, flags: u32) -> io::Result<()> {
         unsafe {
             let mut overlapped: c::OVERLAPPED = mem::zeroed();
-            let event = c::CreateEventW(ptr::null_mut(), c::FALSE, c::FALSE, ptr::null());
+            let event = c::CreateEventA(ptr::null_mut(), c::FALSE, c::FALSE, ptr::null());
             if event.is_null() {
                 return Err(io::Error::last_os_error());
             }
@@ -432,6 +512,15 @@ impl File {
     }
 
     pub fn lock(&self) -> io::Result<()> {
+        #[cfg(target_family = "rust9x")]
+        {
+            // try `LockFile`/`try_lock`, as that one is available on 9x/ME
+            if self.try_lock().is_ok() {
+                return Ok(());
+            }
+
+            // otherwise just fail the call to `LockFileEx` here
+        }
         self.acquire_lock(c::LOCKFILE_EXCLUSIVE_LOCK)
     }
 
@@ -440,17 +529,8 @@ impl File {
     }
 
     pub fn try_lock(&self) -> Result<(), TryLockError> {
-        let result = cvt(unsafe {
-            let mut overlapped = mem::zeroed();
-            c::LockFileEx(
-                self.handle.as_raw_handle(),
-                c::LOCKFILE_EXCLUSIVE_LOCK | c::LOCKFILE_FAIL_IMMEDIATELY,
-                0,
-                u32::MAX,
-                u32::MAX,
-                &mut overlapped,
-            )
-        });
+        let result =
+            cvt(unsafe { c::LockFile(self.handle.as_raw_handle(), 0, 0, u32::MAX, u32::MAX) });
 
         match result {
             Ok(_) => Ok(()),
@@ -499,24 +579,60 @@ impl File {
     }
 
     pub fn truncate(&self, size: u64) -> io::Result<()> {
+        Self::truncate_inner(self.handle.as_raw_handle(), size)
+    }
+
+    #[cfg(not(target_family = "rust9x"))]
+    pub fn truncate_inner(handle: RawHandle, size: u64) -> io::Result<()> {
         let info = c::FILE_END_OF_FILE_INFO { EndOfFile: size as i64 };
-        api::set_file_information_by_handle(self.handle.as_raw_handle(), &info).io_result()
+        api::set_file_information_by_handle(handle, &info).io_result()
+    }
+
+    #[cfg(target_family = "rust9x")]
+    pub fn truncate_inner(handle: RawHandle, size: u64) -> io::Result<()> {
+        if crate::sys::compat::checks::is_windows_nt() {
+            let info = c::FILE_END_OF_FILE_INFO { EndOfFile: size as i64 };
+            api::set_file_information_by_handle(handle, &info).io_result()
+        } else {
+            let mut saved_pos = 0i64;
+            unsafe {
+                // get current file pointer position
+                cvt(c::SetFilePointerEx(handle, 0, &mut saved_pos, c::FILE_CURRENT))?;
+
+                // seek to new end position
+                cvt(c::SetFilePointerEx(handle, size as i64, ptr::null_mut(), c::FILE_BEGIN))?;
+
+                // set current position as end of file
+                cvt(c::SetEndOfFile(handle))?;
+
+                // go back to saved position
+                cvt(c::SetFilePointerEx(handle, saved_pos, ptr::null_mut(), c::FILE_BEGIN))?;
+            }
+            Ok(())
+        }
     }
 
     #[cfg(not(target_vendor = "uwp"))]
     pub fn file_attr(&self) -> io::Result<FileAttr> {
         unsafe {
-            let mut info: c::BY_HANDLE_FILE_INFORMATION = mem::zeroed();
-            cvt(c::GetFileInformationByHandle(self.handle.as_raw_handle(), &mut info))?;
+            let mut info = MaybeUninit::uninit();
+            cvt(c::GetFileInformationByHandle(self.handle.as_raw_handle(), info.as_mut_ptr()))?;
+            let info = info.assume_init_ref();
             let mut reparse_tag = 0;
             if info.dwFileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                let mut attr_tag: c::FILE_ATTRIBUTE_TAG_INFO = mem::zeroed();
+                let mut attr_tag: MaybeUninit<c::FILE_ATTRIBUTE_TAG_INFO> = MaybeUninit::uninit();
+                // rust9x: If a reparse point attribute is returned, we must be on NT-based Windows
+                // with support for FileAttributeTagInformation, so our
+                // fallback implementation of `GetFileInformationByHandleEx` will work without
+                // further checks.
+
                 cvt(c::GetFileInformationByHandleEx(
                     self.handle.as_raw_handle(),
                     c::FileAttributeTagInfo,
-                    (&raw mut attr_tag).cast(),
-                    size_of::<c::FILE_ATTRIBUTE_TAG_INFO>().try_into().unwrap(),
+                    attr_tag.as_mut_ptr().cast(),
+                    mem::size_of::<c::FILE_ATTRIBUTE_TAG_INFO>().try_into().unwrap(),
                 ))?;
+                let attr_tag = attr_tag.assume_init_ref();
                 if attr_tag.FileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
                     reparse_tag = attr_tag.ReparseTag;
                 }
@@ -802,15 +918,15 @@ impl File {
     /// Gets only basic file information such as attributes and file times.
     fn basic_info(&self) -> io::Result<c::FILE_BASIC_INFO> {
         unsafe {
-            let mut info: c::FILE_BASIC_INFO = mem::zeroed();
+            let mut info: MaybeUninit<c::FILE_BASIC_INFO> = MaybeUninit::uninit();
             let size = size_of_val(&info);
             cvt(c::GetFileInformationByHandleEx(
                 self.handle.as_raw_handle(),
                 c::FileBasicInfo,
-                (&raw mut info) as *mut c_void,
+                info.as_mut_ptr().cast(),
                 size as u32,
             ))?;
-            Ok(info)
+            Ok(info.assume_init())
         }
     }
 
@@ -871,6 +987,10 @@ impl File {
     /// you will always iterate an empty directory regardless of the target.
     #[allow(unused)]
     fn fill_dir_buff(&self, buffer: &mut DirBuff, restart: bool) -> Result<bool, WinError> {
+        #[cfg(target_family = "rust9x")]
+        let class =
+            if restart { c::FileFullDirectoryRestartInfo } else { c::FileFullDirectoryInfo };
+        #[cfg(not(target_family = "rust9x"))]
         let class =
             if restart { c::FileIdBothDirectoryRestartInfo } else { c::FileIdBothDirectoryInfo };
 
@@ -947,6 +1067,9 @@ impl<'a> Iterator for DirBuffIter<'a> {
         //   `FILE_ID_BOTH_DIR_INFO` and the trailing filename (for at least
         //   `FileNameLength` bytes)
         let (name, is_directory, next_entry) = unsafe {
+            #[cfg(target_family = "rust9x")]
+            let info = buffer.as_ptr().cast::<c::FILE_FULL_DIR_INFO>();
+            #[cfg(not(target_family = "rust9x"))]
             let info = buffer.as_ptr().cast::<c::FILE_ID_BOTH_DIR_INFO>();
             // While this is guaranteed to be aligned in documentation for
             // https://docs.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info
@@ -1043,8 +1166,15 @@ fn debug_path_handle<'a, 'b>(
     // FIXME(#24570): add more info here (e.g., mode)
     let mut b = f.debug_struct(name);
     b.field("handle", &handle.as_raw_handle());
+    #[cfg(not(target_family = "rust9x"))]
     if let Ok(path) = get_path(handle) {
         b.field("path", &path);
+    }
+    #[cfg(target_family = "rust9x")]
+    if c::GetFinalPathNameByHandleW::available().is_some() {
+        if let Ok(path) = get_path(handle) {
+            b.field("path", &path);
+        }
     }
     b
 }
@@ -1230,7 +1360,7 @@ pub fn readdir(p: &Path) -> io::Result<ReadDir> {
     let path = maybe_verbatim(&star)?;
 
     unsafe {
-        let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
+        let mut wfd: MaybeUninit<c::WIN32_FIND_DATAW> = MaybeUninit::uninit();
         // this is like FindFirstFileW (see https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfileexw),
         // but with FindExInfoBasic it should skip filling WIN32_FIND_DATAW.cAlternateFileName
         // (see https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-win32_find_dataw)
@@ -1238,20 +1368,26 @@ pub fn readdir(p: &Path) -> io::Result<ReadDir> {
         //
         // We can pass FIND_FIRST_EX_LARGE_FETCH to dwAdditionalFlags to speed up things more,
         // but as we don't know user's use profile of this function, lets be conservative.
+        #[cfg(not(target_family = "rust9x"))]
         let find_handle = c::FindFirstFileExW(
             path.as_ptr(),
             c::FindExInfoBasic,
-            &mut wfd as *mut _ as _,
+            wfd.as_mut_ptr().cast(),
             c::FindExSearchNameMatch,
             ptr::null(),
             0,
         );
 
+        // We take the hit of filling in the alternate file name because both `FindFirstFileExW` and
+        // `FindExInfoBasic` aren't necessarily supported.
+        #[cfg(target_family = "rust9x")]
+        let find_handle = c::FindFirstFileW(path.as_ptr(), wfd.as_mut_ptr());
+
         if find_handle != c::INVALID_HANDLE_VALUE {
             Ok(ReadDir {
                 handle: Some(FindNextFileHandle(find_handle)),
                 root: Arc::new(root),
-                first: Some(wfd),
+                first: Some(wfd.assume_init()),
             })
         } else {
             // The status `ERROR_FILE_NOT_FOUND` is returned by the `FindFirstFileExW` function
@@ -1378,6 +1514,44 @@ pub fn rmdir(p: &WCStr) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(target_family = "rust9x")]
+pub fn remove_dir_all(p: &Path) -> io::Result<()> {
+    use crate::sys::path::with_native_path;
+
+    with_native_path(p, &|path| {
+        // if the modern file/directory APIs are not available (9x/Me), we'll fall back to the old
+        // (unsafe, see https://github.com/rust-lang/rust/pull/93112) directory removal
+        // implementation
+        if !crate::sys::compat::checks::is_windows_nt() {
+            let filetype = lstat(path)?.file_type();
+            if filetype.is_symlink() {
+                // On Windows symlinks to files and directories are removed differently.
+                // rmdir only deletes dir symlinks and junctions, not file symlinks.
+                return rmdir(path);
+            } else {
+                return remove_dir_all::remove_dir_all_recursive_old(p);
+            }
+        }
+
+        // Open a file or directory without following symlinks.
+        let mut opts = OpenOptions::new();
+        opts.access_mode(c::FILE_LIST_DIRECTORY);
+        // `FILE_FLAG_BACKUP_SEMANTICS` allows opening directories.
+        // `FILE_FLAG_OPEN_REPARSE_POINT` opens a link instead of its target.
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | c::FILE_FLAG_OPEN_REPARSE_POINT);
+        let file = File::open_native(path, &opts)?;
+
+        // Test if the file is not a directory or a symlink to a directory.
+        if (file.basic_info()?.FileAttributes & c::FILE_ATTRIBUTE_DIRECTORY) == 0 {
+            return Err(io::Error::from_raw_os_error(c::ERROR_DIRECTORY as _));
+        }
+
+        // Remove the directory and all its contents.
+        remove_dir_all_iterative(file).io_result()
+    })
+}
+
+#[cfg(not(target_family = "rust9x"))]
 pub fn remove_dir_all(path: &WCStr) -> io::Result<()> {
     // Open a file or directory without following symlinks.
     let mut opts = OpenOptions::new();
@@ -1485,13 +1659,57 @@ fn metadata(path: &WCStr, reparse: ReparsePoint) -> io::Result<FileAttr> {
     let mut opts = OpenOptions::new();
     // No read or write permissions are necessary
     opts.access_mode(0);
+
+    #[cfg(not(target_family = "rust9x"))]
     opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | reparse.as_flag());
+    #[cfg(target_family = "rust9x")]
+    if crate::sys::compat::checks::is_windows_nt() {
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | reparse.as_flag());
+    }
 
     // Attempt to open the file normally.
     // If that fails with `ERROR_SHARING_VIOLATION` then retry using `FindFirstFileExW`.
     // If the fallback fails for any reason we return the original error.
     match File::open_native(path, &opts) {
         Ok(file) => file.file_attr(),
+        #[cfg(target_family = "rust9x")]
+        Err(e) if !crate::sys::compat::checks::is_windows_nt() => unsafe {
+            // Get at least the attributes in case `FindFirstFile` fails down below
+            let attr = c::GetFileAttributesW(path.as_ptr());
+            if attr == c::INVALID_FILE_ATTRIBUTES {
+                return Err(e);
+            }
+
+            // Since we don't have access to `FILE_FLAG_BACKUP_SEMANTICS` on 9x/ME, fall back to
+            // `FindFirstFile` for directories
+            let mut find_data = MaybeUninit::uninit();
+            let handle = c::FindFirstFileW(path.as_ptr(), find_data.as_mut_ptr());
+
+            if handle == c::INVALID_HANDLE_VALUE {
+                // You can't get info about the root directory via FindFirstFile, so in that
+                // case and any other cases where FindFirstFile fails, fall back to the
+                // already-retrieved attributes.
+                //
+                // For directories, we can only get attributes on 9x/ME.
+                return Ok(FileAttr {
+                    attributes: attr,
+                    creation_time: mem::zeroed(),
+                    last_access_time: mem::zeroed(),
+                    last_write_time: mem::zeroed(),
+                    change_time: None,
+                    file_size: 0,
+                    reparse_tag: 0,
+                    volume_serial_number: None,
+                    number_of_links: None,
+                    file_index: None,
+                });
+            }
+
+            let attrs = FileAttr::from(find_data.assume_init());
+            c::FindClose(handle);
+
+            return Ok(attrs);
+        },
         Err(e)
             if [Some(c::ERROR_SHARING_VIOLATION as _), Some(c::ERROR_ACCESS_DENIED as _)]
                 .contains(&e.raw_os_error()) =>
@@ -1508,11 +1726,16 @@ fn metadata(path: &WCStr, reparse: ReparsePoint) -> io::Result<FileAttr> {
                 // `ERROR_SHARING_VIOLATION` means the file exists (but is locked)
                 // therefore it's safe to assume the file name given does not
                 // include wildcards.
-                let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
+                let mut wfd: MaybeUninit<c::WIN32_FIND_DATAW> = MaybeUninit::uninit();
+
+                #[cfg(target_family = "rust9x")]
+                let handle = c::FindFirstFileW(path.as_ptr(), &mut wfd as *mut _ as _);
+
+                #[cfg(not(target_family = "rust9x"))]
                 let handle = c::FindFirstFileExW(
                     path.as_ptr(),
                     c::FindExInfoBasic,
-                    &mut wfd as *mut _ as _,
+                    wfd.as_mut_ptr().cast(),
                     c::FindExSearchNameMatch,
                     ptr::null(),
                     0,
@@ -1528,7 +1751,7 @@ fn metadata(path: &WCStr, reparse: ReparsePoint) -> io::Result<FileAttr> {
 
                     // `FindFirstFileExW` reads the cached file information from the
                     // directory. The downside is that this metadata may be outdated.
-                    let attrs = FileAttr::from(wfd);
+                    let attrs = FileAttr::from(wfd.assume_init());
                     if reparse == ReparsePoint::Follow && attrs.file_type().is_symlink() {
                         Err(e)
                     } else {
@@ -1560,7 +1783,15 @@ pub fn set_perm_nofollow(p: &WCStr, perm: FilePermissions) -> io::Result<()> {
 pub fn set_times(p: &WCStr, times: FileTimes) -> io::Result<()> {
     let mut opts = OpenOptions::new();
     opts.access_mode(c::FILE_WRITE_ATTRIBUTES);
+    #[cfg(not(target_family = "rust9x"))]
+    // Backup semantics enables opening directories as well as files.
     opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
+
+    #[cfg(target_family = "rust9x")]
+    if crate::sys::compat::checks::is_windows_nt() {
+        // Backup semantics enables opening directories as well as files.
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
+    }
     let file = File::open_native(p, &opts)?;
     file.set_times(times)
 }
@@ -1568,8 +1799,15 @@ pub fn set_times(p: &WCStr, times: FileTimes) -> io::Result<()> {
 pub fn set_times_nofollow(p: &WCStr, times: FileTimes) -> io::Result<()> {
     let mut opts = OpenOptions::new();
     opts.access_mode(c::FILE_WRITE_ATTRIBUTES);
+    #[cfg(not(target_family = "rust9x"))]
     // `FILE_FLAG_OPEN_REPARSE_POINT` for no_follow behavior
     opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | c::FILE_FLAG_OPEN_REPARSE_POINT);
+
+    #[cfg(target_family = "rust9x")]
+    if crate::sys::compat::checks::is_windows_nt() {
+        // `FILE_FLAG_OPEN_REPARSE_POINT` for no_follow behavior
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | c::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
     let file = File::open_native(p, &opts)?;
     file.set_times(times)
 }
@@ -1646,6 +1884,7 @@ fn get_path_fallback(handle: c::HANDLE) -> Option<PathBuf> {
     .flatten()
 }
 
+#[cfg(not(target_family = "rust9x"))]
 pub fn canonicalize(p: &WCStr) -> io::Result<PathBuf> {
     let mut opts = OpenOptions::new();
     // No read or write permissions are necessary
@@ -1654,6 +1893,27 @@ pub fn canonicalize(p: &WCStr) -> io::Result<PathBuf> {
     opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
     let f = File::open_native(p, &opts)?;
     get_path(f.handle)
+}
+
+#[cfg(target_family = "rust9x")]
+pub fn canonicalize(p: &WCStr) -> io::Result<PathBuf> {
+    if c::GetFinalPathNameByHandleW::available().is_some() {
+        let mut opts = OpenOptions::new();
+        // No read or write permissions are necessary
+        opts.access_mode(0);
+        // This flag is so we can open directories too
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
+        let f = File::open_native(p, &opts)?;
+        get_path(f.handle)
+    } else {
+        // systems that don't support GetFinalPathNameByHandleW also don't support symlinks, so we
+        // fall back to using GetFullPathName.
+        let mut file_part = ptr::null_mut();
+        fill_utf16_buf(
+            |buf, sz| unsafe { c::GetFullPathNameW(p.as_ptr(), sz, buf, &mut file_part) },
+            |buf| PathBuf::from(OsString::from_wide(buf)),
+        )
+    }
 }
 
 pub fn copy(from: &WCStr, to: &WCStr) -> io::Result<u64> {
@@ -1781,6 +2041,7 @@ pub fn junction_point(original: &Path, link: &Path) -> io::Result<()> {
     }
 }
 
+#[cfg(not(target_family = "rust9x"))]
 // Try to see if a file exists but, unlike `exists`, report I/O errors.
 pub fn exists(path: &WCStr) -> io::Result<bool> {
     // Open the file to ensure any symlinks are followed to their target.
@@ -1811,6 +2072,60 @@ pub fn exists(path: &WCStr) -> io::Result<bool> {
             // permanent so we report them here.
             _ => Err(e),
         },
+        // The file was opened successfully therefore it must exist,
+        Ok(_) => Ok(true),
+    }
+}
+
+#[cfg(target_family = "rust9x")]
+// Try to see if a file exists but, unlike `exists`, report I/O errors.
+pub fn exists(path: &WCStr) -> io::Result<bool> {
+    fn match_kind(e: crate::io::Error) -> io::Result<bool> {
+        match e.kind() {
+            // The file definitely does not exist
+            io::ErrorKind::NotFound => Ok(false),
+
+            // `ERROR_SHARING_VIOLATION` means that the file has been locked by
+            // another process. This is often temporary so we simply report it
+            // as the file existing.
+            _ if e.raw_os_error() == Some(c::ERROR_SHARING_VIOLATION as i32) => Ok(true),
+
+            // `ERROR_CANT_ACCESS_FILE` means that a file exists but that the
+            // reparse point could not be handled by `CreateFile`.
+            // This can happen for special files such as:
+            // * Unix domain sockets which you need to `connect` to
+            // * App exec links which require using `CreateProcess`
+            _ if e.raw_os_error() == Some(c::ERROR_CANT_ACCESS_FILE as i32) => Ok(true),
+
+            // Other errors such as `ERROR_ACCESS_DENIED` may indicate that the
+            // file exists. However, these types of errors are usually more
+            // permanent so we report them here.
+            _ => Err(e),
+        }
+    }
+
+    // Open the file to ensure any symlinks are followed to their target.
+    let mut opts = OpenOptions::new();
+    // No read, write, etc access rights are needed.
+    opts.access_mode(0);
+
+    if crate::sys::compat::checks::is_windows_nt() {
+        // Backup semantics enables opening directories as well as files.
+        opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
+    } else {
+        let attr = unsafe { c::GetFileAttributesW(path.as_ptr()) };
+        if attr == c::INVALID_FILE_ATTRIBUTES {
+            return match_kind(io::Error::last_os_error());
+        } else {
+            // can't open a directory on 9x/ME anyways
+            if attr & c::FILE_ATTRIBUTE_DIRECTORY != 0 {
+                return Ok(true);
+            }
+        }
+    }
+
+    match File::open_native(path, &opts) {
+        Err(e) => match_kind(e),
         // The file was opened successfully therefore it must exist,
         Ok(_) => Ok(true),
     }

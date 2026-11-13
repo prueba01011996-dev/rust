@@ -6,22 +6,30 @@ windows_link::link!("kernel32.dll" "system" fn CloseHandle(hobject : HANDLE) -> 
 windows_link::link!("kernel32.dll" "system" fn CompareStringOrdinal(lpstring1 : *const u16, cchcount1 : i32, lpstring2 : *const u16, cchcount2 : i32, bignorecase : BOOL) -> i32);
 windows_link::link!("kernel32.dll" "system" fn CopyFileExW(lpexistingfilename : PCWSTR, lpnewfilename : PCWSTR, lpprogressroutine : LPPROGRESS_ROUTINE, lpdata : *const core::ffi::c_void, pbcancel : *mut BOOL, dwcopyflags : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn CreateDirectoryW(lppathname : PCWSTR, lpsecurityattributes : *const SECURITY_ATTRIBUTES) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn CreateEventA(lpeventattributes : *const SECURITY_ATTRIBUTES, bmanualreset : BOOL, binitialstate : BOOL, lpname : PCSTR) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreateEventW(lpeventattributes : *const SECURITY_ATTRIBUTES, bmanualreset : BOOL, binitialstate : BOOL, lpname : PCWSTR) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreateFileW(lpfilename : PCWSTR, dwdesiredaccess : u32, dwsharemode : u32, lpsecurityattributes : *const SECURITY_ATTRIBUTES, dwcreationdisposition : u32, dwflagsandattributes : u32, htemplatefile : HANDLE) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreateHardLinkW(lpfilename : PCWSTR, lpexistingfilename : PCWSTR, lpsecurityattributes : *const SECURITY_ATTRIBUTES) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn CreateMutexA(lpmutexattributes : *const SECURITY_ATTRIBUTES, binitialowner : BOOL, lpname : PCSTR) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreateNamedPipeW(lpname : PCWSTR, dwopenmode : u32, dwpipemode : u32, nmaxinstances : u32, noutbuffersize : u32, ninbuffersize : u32, ndefaulttimeout : u32, lpsecurityattributes : *const SECURITY_ATTRIBUTES) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreatePipe(hreadpipe : *mut HANDLE, hwritepipe : *mut HANDLE, lppipeattributes : *const SECURITY_ATTRIBUTES, nsize : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn CreateProcessW(lpapplicationname : PCWSTR, lpcommandline : PWSTR, lpprocessattributes : *const SECURITY_ATTRIBUTES, lpthreadattributes : *const SECURITY_ATTRIBUTES, binherithandles : BOOL, dwcreationflags : u32, lpenvironment : *const core::ffi::c_void, lpcurrentdirectory : PCWSTR, lpstartupinfo : *const STARTUPINFOW, lpprocessinformation : *mut PROCESS_INFORMATION) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn CreateSymbolicLinkW(lpsymlinkfilename : PCWSTR, lptargetfilename : PCWSTR, dwflags : u32) -> bool);
 windows_link::link!("kernel32.dll" "system" fn CreateThread(lpthreadattributes : *const SECURITY_ATTRIBUTES, dwstacksize : usize, lpstartaddress : LPTHREAD_START_ROUTINE, lpparameter : *const core::ffi::c_void, dwcreationflags : u32, lpthreadid : *mut u32) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn CreateWaitableTimerExW(lptimerattributes : *const SECURITY_ATTRIBUTES, lptimername : PCWSTR, dwflags : u32, dwdesiredaccess : u32) -> HANDLE);
+windows_link::link!("advapi32.dll" "system" fn CryptAcquireContextA(phprov : *mut HCRYPTPROV, szcontainer : PCSTR, szprovider : PCSTR, dwprovtype : u32, dwflags : u32) -> BOOL);
+windows_link::link!("advapi32.dll" "system" fn CryptGenRandom(hprov : HCRYPTPROV, dwlen : u32, pbbuffer : *mut u8) -> BOOL);
+windows_link::link!("advapi32.dll" "system" fn CryptReleaseContext(hprov : HCRYPTPROV, dwflags : u32) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn DeleteCriticalSection(lpcriticalsection : LPCRITICAL_SECTION));
 windows_link::link!("kernel32.dll" "system" fn DeleteFileW(lpfilename : PCWSTR) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn DeleteProcThreadAttributeList(lpattributelist : *mut _PROC_THREAD_ATTRIBUTE_LIST));
 windows_link::link!("kernel32.dll" "system" fn DeviceIoControl(hdevice : HANDLE, dwiocontrolcode : u32, lpinbuffer : *const core::ffi::c_void, ninbuffersize : u32, lpoutbuffer : *mut core::ffi::c_void, noutbuffersize : u32, lpbytesreturned : *mut u32, lpoverlapped : *mut OVERLAPPED) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn DuplicateHandle(hsourceprocesshandle : HANDLE, hsourcehandle : HANDLE, htargetprocesshandle : HANDLE, lptargethandle : *mut HANDLE, dwdesiredaccess : u32, binherithandle : BOOL, dwoptions : u32) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn EnterCriticalSection(lpcriticalsection : LPCRITICAL_SECTION));
 windows_link::link!("kernel32.dll" "system" fn ExitProcess(uexitcode : u32) -> !);
 windows_link::link!("kernel32.dll" "system" fn FindClose(hfindfile : HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn FindFirstFileExW(lpfilename : PCWSTR, finfolevelid : FINDEX_INFO_LEVELS, lpfindfiledata : *mut core::ffi::c_void, fsearchop : FINDEX_SEARCH_OPS, lpsearchfilter : *const core::ffi::c_void, dwadditionalflags : u32) -> HANDLE);
+windows_link::link!("kernel32.dll" "system" fn FindFirstFileW(lpfilename : PCWSTR, lpfindfiledata : *mut WIN32_FIND_DATAW) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn FindNextFileW(hfindfile : HANDLE, lpfindfiledata : *mut WIN32_FIND_DATAW) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn FlsAlloc(lpcallback : PFLS_CALLBACK_FUNCTION) -> u32);
 windows_link::link!("kernel32.dll" "system" fn FlsFree(dwflsindex : u32) -> BOOL);
@@ -45,6 +53,7 @@ windows_link::link!("kernel32.dll" "system" fn GetExitCodeProcess(hprocess : HAN
 windows_link::link!("kernel32.dll" "system" fn GetFileAttributesW(lpfilename : PCWSTR) -> u32);
 windows_link::link!("kernel32.dll" "system" fn GetFileInformationByHandle(hfile : HANDLE, lpfileinformation : *mut BY_HANDLE_FILE_INFORMATION) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn GetFileInformationByHandleEx(hfile : HANDLE, fileinformationclass : FILE_INFO_BY_HANDLE_CLASS, lpfileinformation : *mut core::ffi::c_void, dwbuffersize : u32) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn GetFileSize(hfile : HANDLE, lpfilesizehigh : *mut u32) -> u32);
 windows_link::link!("kernel32.dll" "system" fn GetFileSizeEx(hfile : HANDLE, lpfilesize : *mut i64) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn GetFileType(hfile : HANDLE) -> u32);
 windows_link::link!("kernel32.dll" "system" fn GetFinalPathNameByHandleW(hfile : HANDLE, lpszfilepath : PWSTR, cchfilepath : u32, dwflags : u32) -> u32);
@@ -62,23 +71,33 @@ windows_link::link!("kernel32.dll" "system" fn GetProcessId(process : HANDLE) ->
 windows_link::link!("kernel32.dll" "system" fn GetStdHandle(nstdhandle : u32) -> HANDLE);
 windows_link::link!("kernel32.dll" "system" fn GetSystemDirectoryW(lpbuffer : PWSTR, usize : u32) -> u32);
 windows_link::link!("kernel32.dll" "system" fn GetSystemInfo(lpsysteminfo : *mut SYSTEM_INFO));
+windows_link::link!("kernel32.dll" "system" fn GetSystemTime(lpsystemtime : *mut SYSTEMTIME));
 windows_link::link!("kernel32.dll" "system" fn GetSystemTimeAsFileTime(lpsystemtimeasfiletime : *mut FILETIME));
 windows_link::link!("kernel32.dll" "system" fn GetSystemTimePreciseAsFileTime(lpsystemtimeasfiletime : *mut FILETIME));
 windows_link::link!("kernel32.dll" "system" fn GetTempPathW(nbufferlength : u32, lpbuffer : PWSTR) -> u32);
+windows_link::link!("kernel32.dll" "system" fn GetTickCount() -> u32);
 windows_link::link!("userenv.dll" "system" fn GetUserProfileDirectoryW(htoken : HANDLE, lpprofiledir : PWSTR, lpcchsize : *mut u32) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn GetVersion() -> u32);
 windows_link::link!("kernel32.dll" "system" fn GetWindowsDirectoryW(lpbuffer : PWSTR, usize : u32) -> u32);
 windows_link::link!("kernel32.dll" "system" fn InitOnceBeginInitialize(lpinitonce : LPINIT_ONCE, dwflags : u32, fpending : *mut BOOL, lpcontext : *mut *mut core::ffi::c_void) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn InitOnceComplete(lpinitonce : LPINIT_ONCE, dwflags : u32, lpcontext : *const core::ffi::c_void) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn InitializeCriticalSection(lpcriticalsection : LPCRITICAL_SECTION));
 windows_link::link!("kernel32.dll" "system" fn InitializeProcThreadAttributeList(lpattributelist : *mut _PROC_THREAD_ATTRIBUTE_LIST, dwattributecount : u32, dwflags : u32, lpsize : *mut usize) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn IsThreadAFiber() -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn LeaveCriticalSection(lpcriticalsection : LPCRITICAL_SECTION));
+windows_link::link!("kernel32.dll" "system" fn LoadLibraryA(lplibfilename : PCSTR) -> HMODULE);
 windows_link::link!("kernel32.dll" "system" fn LocalFree(hmem : HLOCAL) -> HLOCAL);
+windows_link::link!("kernel32.dll" "system" fn LockFile(hfile : HANDLE, dwfileoffsetlow : u32, dwfileoffsethigh : u32, nnumberofbytestolocklow : u32, nnumberofbytestolockhigh : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn LockFileEx(hfile : HANDLE, dwflags : u32, dwreserved : u32, nnumberofbytestolocklow : u32, nnumberofbytestolockhigh : u32, lpoverlapped : *mut OVERLAPPED) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn MoveFileExW(lpexistingfilename : PCWSTR, lpnewfilename : PCWSTR, dwflags : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn MultiByteToWideChar(codepage : u32, dwflags : u32, lpmultibytestr : *const i8, cbmultibyte : i32, lpwidecharstr : PWSTR, cchwidechar : i32) -> i32);
 windows_link::link!("ntdll.dll" "system" fn NtCreateFile(filehandle : *mut HANDLE, desiredaccess : ACCESS_MASK, objectattributes : *const OBJECT_ATTRIBUTES, iostatusblock : *mut IO_STATUS_BLOCK, allocationsize : *const i64, fileattributes : u32, shareaccess : u32, createdisposition : u32, createoptions : u32, eabuffer : *const core::ffi::c_void, ealength : u32) -> NTSTATUS);
 windows_link::link!("ntdll.dll" "system" fn NtOpenFile(filehandle : *mut HANDLE, desiredaccess : ACCESS_MASK, objectattributes : *const OBJECT_ATTRIBUTES, iostatusblock : *mut IO_STATUS_BLOCK, shareaccess : u32, openoptions : u32) -> NTSTATUS);
+windows_link::link!("ntdll.dll" "system" fn NtQueryDirectoryFile(filehandle : HANDLE, event : HANDLE, apcroutine : PIO_APC_ROUTINE, apccontext : *const core::ffi::c_void, iostatusblock : *mut IO_STATUS_BLOCK, fileinformation : *mut core::ffi::c_void, length : u32, fileinformationclass : FILE_INFORMATION_CLASS, returnsingleentry : bool, filename : *const UNICODE_STRING, restartscan : bool) -> NTSTATUS);
+windows_link::link!("ntdll.dll" "system" fn NtQueryInformationFile(filehandle : HANDLE, iostatusblock : *mut IO_STATUS_BLOCK, fileinformation : *mut core::ffi::c_void, length : u32, fileinformationclass : FILE_INFORMATION_CLASS) -> NTSTATUS);
 windows_link::link!("ntdll.dll" "system" fn NtReadFile(filehandle : HANDLE, event : HANDLE, apcroutine : PIO_APC_ROUTINE, apccontext : *const core::ffi::c_void, iostatusblock : *mut IO_STATUS_BLOCK, buffer : *mut core::ffi::c_void, length : u32, byteoffset : *const i64, key : *const u32) -> NTSTATUS);
 windows_link::link!("ntdll.dll" "system" fn NtSetInformationFile(filehandle : HANDLE, iostatusblock : *mut IO_STATUS_BLOCK, fileinformation : *const core::ffi::c_void, length : u32, fileinformationclass : FILE_INFORMATION_CLASS) -> NTSTATUS);
+windows_link::link!("ntdll.dll" "system" fn NtWaitForSingleObject(handle : HANDLE, alertable : bool, timeout : *const i64) -> NTSTATUS);
 windows_link::link!("ntdll.dll" "system" fn NtWriteFile(filehandle : HANDLE, event : HANDLE, apcroutine : PIO_APC_ROUTINE, apccontext : *const core::ffi::c_void, iostatusblock : *mut IO_STATUS_BLOCK, buffer : *const core::ffi::c_void, length : u32, byteoffset : *const i64, key : *const u32) -> NTSTATUS);
 windows_link::link!("advapi32.dll" "system" fn OpenProcessToken(processhandle : HANDLE, desiredaccess : u32, tokenhandle : *mut HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn QueryDosDeviceW(lpdevicename : PCWSTR, lptargetpath : PWSTR, ucchmax : u32) -> u32);
@@ -87,15 +106,20 @@ windows_link::link!("kernel32.dll" "system" fn QueryPerformanceFrequency(lpfrequ
 windows_link::link!("kernel32.dll" "system" fn ReadConsoleW(hconsoleinput : HANDLE, lpbuffer : *mut core::ffi::c_void, nnumberofcharstoread : u32, lpnumberofcharsread : *mut u32, pinputcontrol : *const CONSOLE_READCONSOLE_CONTROL) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn ReadFile(hfile : HANDLE, lpbuffer : *mut core::ffi::c_void, nnumberofbytestoread : u32, lpnumberofbytesread : *mut u32, lpoverlapped : *mut OVERLAPPED) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn ReadFileEx(hfile : HANDLE, lpbuffer : *mut core::ffi::c_void, nnumberofbytestoread : u32, lpoverlapped : *mut OVERLAPPED, lpcompletionroutine : LPOVERLAPPED_COMPLETION_ROUTINE) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn ReleaseMutex(hmutex : HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn ReleaseSRWLockExclusive(srwlock : *mut RTL_SRWLOCK));
 windows_link::link!("kernel32.dll" "system" fn ReleaseSRWLockShared(srwlock : *mut RTL_SRWLOCK));
 windows_link::link!("kernel32.dll" "system" fn RemoveDirectoryW(lppathname : PCWSTR) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn ResetEvent(hevent : HANDLE) -> BOOL);
 windows_link::link!("advapi32.dll" "system" "SystemFunction036" fn RtlGenRandom(randombuffer : *mut core::ffi::c_void, randombufferlength : u32) -> bool);
 windows_link::link!("ntdll.dll" "system" fn RtlNtStatusToDosError(status : NTSTATUS) -> u32);
 windows_link::link!("kernel32.dll" "system" fn SetCurrentDirectoryW(lppathname : PCWSTR) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn SetEndOfFile(hfile : HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetEnvironmentVariableW(lpname : PCWSTR, lpvalue : PCWSTR) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn SetEvent(hevent : HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetFileAttributesW(lpfilename : PCWSTR, dwfileattributes : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetFileInformationByHandle(hfile : HANDLE, fileinformationclass : FILE_INFO_BY_HANDLE_CLASS, lpfileinformation : *const core::ffi::c_void, dwbuffersize : u32) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn SetFilePointer(hfile : HANDLE, ldistancetomove : i32, lpdistancetomovehigh : *mut i32, dwmovemethod : u32) -> u32);
 windows_link::link!("kernel32.dll" "system" fn SetFilePointerEx(hfile : HANDLE, lidistancetomove : i64, lpnewfilepointer : *mut i64, dwmovemethod : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetFileTime(hfile : HANDLE, lpcreationtime : *const FILETIME, lplastaccesstime : *const FILETIME, lplastwritetime : *const FILETIME) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetHandleInformation(hobject : HANDLE, dwmask : u32, dwflags : u32) -> BOOL);
@@ -103,10 +127,12 @@ windows_link::link!("kernel32.dll" "system" fn SetLastError(dwerrcode : u32));
 windows_link::link!("kernel32.dll" "system" fn SetStdHandle(nstdhandle : u32, hhandle : HANDLE) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetThreadStackGuarantee(stacksizeinbytes : *mut u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SetWaitableTimer(htimer : HANDLE, lpduetime : *const i64, lperiod : i32, pfncompletionroutine : PTIMERAPCROUTINE, lpargtocompletionroutine : *const core::ffi::c_void, fresume : BOOL) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn SignalObjectAndWait(hobjecttosignal : HANDLE, hobjecttowaiton : HANDLE, dwmilliseconds : u32, balertable : BOOL) -> u32);
 windows_link::link!("kernel32.dll" "system" fn Sleep(dwmilliseconds : u32));
 windows_link::link!("kernel32.dll" "system" fn SleepConditionVariableSRW(conditionvariable : *mut RTL_CONDITION_VARIABLE, srwlock : *mut RTL_SRWLOCK, dwmilliseconds : u32, flags : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn SleepEx(dwmilliseconds : u32, balertable : BOOL) -> u32);
 windows_link::link!("kernel32.dll" "system" fn SwitchToThread() -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn SystemTimeToFileTime(lpsystemtime : *const SYSTEMTIME, lpfiletime : *mut FILETIME) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn TerminateProcess(hprocess : HANDLE, uexitcode : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn TlsAlloc() -> u32);
 windows_link::link!("kernel32.dll" "system" fn TlsFree(dwtlsindex : u32) -> BOOL);
@@ -114,13 +140,17 @@ windows_link::link!("kernel32.dll" "system" fn TlsGetValue(dwtlsindex : u32) -> 
 windows_link::link!("kernel32.dll" "system" fn TlsSetValue(dwtlsindex : u32, lptlsvalue : *const core::ffi::c_void) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn TryAcquireSRWLockExclusive(srwlock : *mut RTL_SRWLOCK) -> bool);
 windows_link::link!("kernel32.dll" "system" fn TryAcquireSRWLockShared(srwlock : *mut RTL_SRWLOCK) -> bool);
+windows_link::link!("kernel32.dll" "system" fn TryEnterCriticalSection(lpcriticalsection : LPCRITICAL_SECTION) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn UnlockFile(hfile : HANDLE, dwfileoffsetlow : u32, dwfileoffsethigh : u32, nnumberofbytestounlocklow : u32, nnumberofbytestounlockhigh : u32) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn UpdateProcThreadAttribute(lpattributelist : *mut _PROC_THREAD_ATTRIBUTE_LIST, dwflags : u32, attribute : usize, lpvalue : *const core::ffi::c_void, cbsize : usize, lppreviousvalue : *mut core::ffi::c_void, lpreturnsize : *const usize) -> BOOL);
 windows_link::link!("ws2_32.dll" "system" fn WSACleanup() -> i32);
+windows_link::link!("ws2_32.dll" "system" fn WSADuplicateSocketA(s : SOCKET, dwprocessid : u32, lpprotocolinfo : *mut WSAPROTOCOL_INFOA) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn WSADuplicateSocketW(s : SOCKET, dwprocessid : u32, lpprotocolinfo : *mut WSAPROTOCOL_INFOW) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn WSAGetLastError() -> i32);
 windows_link::link!("ws2_32.dll" "system" fn WSARecv(s : SOCKET, lpbuffers : *const WSABUF, dwbuffercount : u32, lpnumberofbytesrecvd : *mut u32, lpflags : *mut u32, lpoverlapped : *mut OVERLAPPED, lpcompletionroutine : LPWSAOVERLAPPED_COMPLETION_ROUTINE) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn WSASend(s : SOCKET, lpbuffers : *const WSABUF, dwbuffercount : u32, lpnumberofbytessent : *mut u32, dwflags : u32, lpoverlapped : *mut OVERLAPPED, lpcompletionroutine : LPWSAOVERLAPPED_COMPLETION_ROUTINE) -> i32);
+windows_link::link!("ws2_32.dll" "system" fn WSASetLastError(ierror : i32));
+windows_link::link!("ws2_32.dll" "system" fn WSASocketA(af : i32, r#type : i32, protocol : i32, lpprotocolinfo : *const WSAPROTOCOL_INFOA, g : GROUP, dwflags : u32) -> SOCKET);
 windows_link::link!("ws2_32.dll" "system" fn WSASocketW(af : i32, r#type : i32, protocol : i32, lpprotocolinfo : *const WSAPROTOCOL_INFOW, g : GROUP, dwflags : u32) -> SOCKET);
 windows_link::link!("ws2_32.dll" "system" fn WSAStartup(wversionrequested : u16, lpwsadata : *mut WSADATA) -> i32);
 windows_link::link!("kernel32.dll" "system" fn WaitForMultipleObjects(ncount : u32, lphandles : *const HANDLE, bwaitall : BOOL, dwmilliseconds : u32) -> u32);
@@ -132,6 +162,7 @@ windows_link::link!("api-ms-win-core-synch-l1-2-0.dll" "system" fn WakeByAddress
 windows_link::link!("kernel32.dll" "system" fn WakeConditionVariable(conditionvariable : *mut RTL_CONDITION_VARIABLE));
 windows_link::link!("kernel32.dll" "system" fn WideCharToMultiByte(codepage : u32, dwflags : u32, lpwidecharstr : *const u16, cchwidechar : i32, lpmultibytestr : PSTR, cbmultibyte : i32, lpdefaultchar : *const i8, lpuseddefaultchar : *mut BOOL) -> i32);
 windows_link::link!("kernel32.dll" "system" fn WriteConsoleW(hconsoleoutput : HANDLE, lpbuffer : *const core::ffi::c_void, nnumberofcharstowrite : u32, lpnumberofcharswritten : *mut u32, lpreserved : *const core::ffi::c_void) -> BOOL);
+windows_link::link!("kernel32.dll" "system" fn WriteFile(hfile : HANDLE, lpbuffer : *const core::ffi::c_void, nnumberofbytestowrite : u32, lpnumberofbyteswritten : *mut u32, lpoverlapped : *mut OVERLAPPED) -> BOOL);
 windows_link::link!("kernel32.dll" "system" fn WriteFileEx(hfile : HANDLE, lpbuffer : *const core::ffi::c_void, nnumberofbytestowrite : u32, lpoverlapped : *mut OVERLAPPED, lpcompletionroutine : LPOVERLAPPED_COMPLETION_ROUTINE) -> BOOL);
 windows_link::link!("ws2_32.dll" "system" fn accept(s : SOCKET, addr : *mut SOCKADDR, addrlen : *mut i32) -> SOCKET);
 windows_link::link!("ws2_32.dll" "system" fn bind(s : SOCKET, name : *const SOCKADDR, namelen : i32) -> i32);
@@ -139,6 +170,8 @@ windows_link::link!("ws2_32.dll" "system" fn closesocket(s : SOCKET) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn connect(s : SOCKET, name : *const SOCKADDR, namelen : i32) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn freeaddrinfo(paddrinfo : *const ADDRINFOA));
 windows_link::link!("ws2_32.dll" "system" fn getaddrinfo(pnodename : PCSTR, pservicename : PCSTR, phints : *const ADDRINFOA, ppresult : *mut PADDRINFOA) -> i32);
+windows_link::link!("ws2_32.dll" "system" fn gethostbyname(name : PCSTR) -> *mut hostent);
+windows_link::link!("ws2_32.dll" "system" fn gethostname(name : *mut i8, namelen : i32) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn getpeername(s : SOCKET, name : *mut SOCKADDR, namelen : *mut i32) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn getsockname(s : SOCKET, name : *mut SOCKADDR, namelen : *mut i32) -> i32);
 windows_link::link!("ws2_32.dll" "system" fn getsockopt(s : SOCKET, level : i32, optname : i32, optval : *mut i8, optlen : *mut i32) -> i32);
@@ -520,6 +553,8 @@ pub const CREATE_SUSPENDED: i32 = 4;
 pub const CREATE_UNICODE_ENVIRONMENT: i32 = 1024;
 pub const CREATE_WAITABLE_TIMER_HIGH_RESOLUTION: i32 = 2;
 pub const CREATE_WAITABLE_TIMER_MANUAL_RESET: i32 = 1;
+pub type CRITICAL_SECTION = RTL_CRITICAL_SECTION;
+pub const CRYPT_VERIFYCONTEXT: u32 = 4026531840;
 pub const CSTR_EQUAL: i32 = 2;
 pub const CSTR_GREATER_THAN: i32 = 3;
 pub const CSTR_LESS_THAN: i32 = 1;
@@ -2541,6 +2576,27 @@ pub const FILE_FLAG_RANDOM_ACCESS: i32 = 268435456;
 pub const FILE_FLAG_SEQUENTIAL_SCAN: i32 = 134217728;
 pub const FILE_FLAG_SESSION_AWARE: i32 = 8388608;
 pub const FILE_FLAG_WRITE_THROUGH: u32 = 2147483648;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FILE_FULL_DIR_INFO {
+    pub NextEntryOffset: u32,
+    pub FileIndex: u32,
+    pub CreationTime: i64,
+    pub LastAccessTime: i64,
+    pub LastWriteTime: i64,
+    pub ChangeTime: i64,
+    pub EndOfFile: i64,
+    pub AllocationSize: i64,
+    pub FileAttributes: u32,
+    pub FileNameLength: u32,
+    pub EaSize: u32,
+    pub FileName: [u16; 1],
+}
+impl Default for FILE_FULL_DIR_INFO {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
 pub const FILE_GENERIC_EXECUTE: i32 = 1179808;
 pub const FILE_GENERIC_READ: i32 = 1179785;
 pub const FILE_GENERIC_WRITE: i32 = 1179926;
@@ -2576,6 +2632,17 @@ pub struct FILE_IO_PRIORITY_HINT_INFO {
     pub PriorityHint: PRIORITY_HINT,
 }
 pub const FILE_LIST_DIRECTORY: i32 = 1;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FILE_NAME_INFO {
+    pub FileNameLength: u32,
+    pub FileName: [u16; 1],
+}
+impl Default for FILE_NAME_INFO {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
 pub const FILE_NAME_NORMALIZED: i32 = 0;
 pub const FILE_NAME_OPENED: i32 = 8;
 pub const FILE_NON_DIRECTORY_FILE: i32 = 64;
@@ -2715,33 +2782,115 @@ pub const FORMAT_MESSAGE_IGNORE_INSERTS: i32 = 512;
 pub const FRS_ERR_SYSVOL_POPULATE_TIMEOUT: i32 = 8014;
 pub const FSCTL_GET_REPARSE_POINT: i32 = 589992;
 pub const FSCTL_SET_REPARSE_POINT: i32 = 589988;
+pub const FileAccessInformation: FILE_INFORMATION_CLASS = 8;
 pub const FileAlignmentInfo: FILE_INFO_BY_HANDLE_CLASS = 17;
+pub const FileAlignmentInformation: FILE_INFORMATION_CLASS = 17;
+pub const FileAllInformation: FILE_INFORMATION_CLASS = 18;
 pub const FileAllocationInfo: FILE_INFO_BY_HANDLE_CLASS = 5;
+pub const FileAllocationInformation: FILE_INFORMATION_CLASS = 19;
+pub const FileAlternateNameInformation: FILE_INFORMATION_CLASS = 21;
 pub const FileAttributeTagInfo: FILE_INFO_BY_HANDLE_CLASS = 9;
+pub const FileAttributeTagInformation: FILE_INFORMATION_CLASS = 35;
 pub const FileBasicInfo: FILE_INFO_BY_HANDLE_CLASS = 0;
+pub const FileBasicInformation: FILE_INFORMATION_CLASS = 4;
+pub const FileBothDirectoryInformation: FILE_INFORMATION_CLASS = 3;
 pub const FileCaseSensitiveInfo: FILE_INFO_BY_HANDLE_CLASS = 23;
+pub const FileCaseSensitiveInformation: FILE_INFORMATION_CLASS = 71;
+pub const FileCaseSensitiveInformationForceAccessCheck: FILE_INFORMATION_CLASS = 75;
+pub const FileCompletionInformation: FILE_INFORMATION_CLASS = 30;
 pub const FileCompressionInfo: FILE_INFO_BY_HANDLE_CLASS = 8;
+pub const FileCompressionInformation: FILE_INFORMATION_CLASS = 28;
+pub const FileDesiredStorageClassInformation: FILE_INFORMATION_CLASS = 67;
+pub const FileDirectoryInformation: FILE_INFORMATION_CLASS = 1;
 pub const FileDispositionInfo: FILE_INFO_BY_HANDLE_CLASS = 4;
 pub const FileDispositionInfoEx: FILE_INFO_BY_HANDLE_CLASS = 21;
+pub const FileDispositionInformation: FILE_INFORMATION_CLASS = 13;
+pub const FileDispositionInformationEx: FILE_INFORMATION_CLASS = 64;
+pub const FileEaInformation: FILE_INFORMATION_CLASS = 7;
 pub const FileEndOfFileInfo: FILE_INFO_BY_HANDLE_CLASS = 6;
+pub const FileEndOfFileInformation: FILE_INFORMATION_CLASS = 20;
 pub const FileFullDirectoryInfo: FILE_INFO_BY_HANDLE_CLASS = 14;
+pub const FileFullDirectoryInformation: FILE_INFORMATION_CLASS = 2;
 pub const FileFullDirectoryRestartInfo: FILE_INFO_BY_HANDLE_CLASS = 15;
+pub const FileFullEaInformation: FILE_INFORMATION_CLASS = 15;
+pub const FileHardLinkFullIdInformation: FILE_INFORMATION_CLASS = 62;
+pub const FileHardLinkInformation: FILE_INFORMATION_CLASS = 46;
+pub const FileId64ExtdBothDirectoryInformation: FILE_INFORMATION_CLASS = 79;
+pub const FileId64ExtdDirectoryInformation: FILE_INFORMATION_CLASS = 78;
+pub const FileIdAllExtdBothDirectoryInformation: FILE_INFORMATION_CLASS = 81;
+pub const FileIdAllExtdDirectoryInformation: FILE_INFORMATION_CLASS = 80;
 pub const FileIdBothDirectoryInfo: FILE_INFO_BY_HANDLE_CLASS = 10;
+pub const FileIdBothDirectoryInformation: FILE_INFORMATION_CLASS = 37;
 pub const FileIdBothDirectoryRestartInfo: FILE_INFO_BY_HANDLE_CLASS = 11;
+pub const FileIdExtdBothDirectoryInformation: FILE_INFORMATION_CLASS = 63;
 pub const FileIdExtdDirectoryInfo: FILE_INFO_BY_HANDLE_CLASS = 19;
+pub const FileIdExtdDirectoryInformation: FILE_INFORMATION_CLASS = 60;
 pub const FileIdExtdDirectoryRestartInfo: FILE_INFO_BY_HANDLE_CLASS = 20;
+pub const FileIdFullDirectoryInformation: FILE_INFORMATION_CLASS = 38;
+pub const FileIdGlobalTxDirectoryInformation: FILE_INFORMATION_CLASS = 50;
 pub const FileIdInfo: FILE_INFO_BY_HANDLE_CLASS = 18;
+pub const FileIdInformation: FILE_INFORMATION_CLASS = 59;
+pub const FileInternalInformation: FILE_INFORMATION_CLASS = 6;
+pub const FileIoCompletionNotificationInformation: FILE_INFORMATION_CLASS = 41;
 pub const FileIoPriorityHintInfo: FILE_INFO_BY_HANDLE_CLASS = 12;
+pub const FileIoPriorityHintInformation: FILE_INFORMATION_CLASS = 43;
+pub const FileIoStatusBlockRangeInformation: FILE_INFORMATION_CLASS = 42;
+pub const FileIsRemoteDeviceInformation: FILE_INFORMATION_CLASS = 51;
+pub const FileKnownFolderInformation: FILE_INFORMATION_CLASS = 76;
+pub const FileLinkInformation: FILE_INFORMATION_CLASS = 11;
+pub const FileLinkInformationBypassAccessCheck: FILE_INFORMATION_CLASS = 57;
+pub const FileLinkInformationEx: FILE_INFORMATION_CLASS = 72;
+pub const FileLinkInformationExBypassAccessCheck: FILE_INFORMATION_CLASS = 73;
+pub const FileMailslotQueryInformation: FILE_INFORMATION_CLASS = 26;
+pub const FileMailslotSetInformation: FILE_INFORMATION_CLASS = 27;
+pub const FileMaximumInformation: FILE_INFORMATION_CLASS = 84;
+pub const FileMemoryPartitionInformation: FILE_INFORMATION_CLASS = 69;
+pub const FileModeInformation: FILE_INFORMATION_CLASS = 16;
+pub const FileMoveClusterInformation: FILE_INFORMATION_CLASS = 31;
+pub const FileMupProviderInfo: FILE_INFORMATION_CLASS = 83;
 pub const FileNameInfo: FILE_INFO_BY_HANDLE_CLASS = 2;
+pub const FileNameInformation: FILE_INFORMATION_CLASS = 9;
+pub const FileNamesInformation: FILE_INFORMATION_CLASS = 12;
+pub const FileNetworkOpenInformation: FILE_INFORMATION_CLASS = 34;
+pub const FileNetworkPhysicalNameInformation: FILE_INFORMATION_CLASS = 49;
 pub const FileNormalizedNameInfo: FILE_INFO_BY_HANDLE_CLASS = 24;
+pub const FileNormalizedNameInformation: FILE_INFORMATION_CLASS = 48;
+pub const FileNumaNodeInformation: FILE_INFORMATION_CLASS = 53;
+pub const FileObjectIdInformation: FILE_INFORMATION_CLASS = 29;
+pub const FilePipeInformation: FILE_INFORMATION_CLASS = 23;
+pub const FilePipeLocalInformation: FILE_INFORMATION_CLASS = 24;
+pub const FilePipeRemoteInformation: FILE_INFORMATION_CLASS = 25;
+pub const FilePositionInformation: FILE_INFORMATION_CLASS = 14;
+pub const FileProcessIdsUsingFileInformation: FILE_INFORMATION_CLASS = 47;
+pub const FileQuotaInformation: FILE_INFORMATION_CLASS = 32;
 pub const FileRemoteProtocolInfo: FILE_INFO_BY_HANDLE_CLASS = 13;
+pub const FileRemoteProtocolInformation: FILE_INFORMATION_CLASS = 55;
 pub const FileRenameInfo: FILE_INFO_BY_HANDLE_CLASS = 3;
 pub const FileRenameInfoEx: FILE_INFO_BY_HANDLE_CLASS = 22;
 pub const FileRenameInformation: FILE_INFORMATION_CLASS = 10;
+pub const FileRenameInformationBypassAccessCheck: FILE_INFORMATION_CLASS = 56;
 pub const FileRenameInformationEx: FILE_INFORMATION_CLASS = 65;
+pub const FileRenameInformationExBypassAccessCheck: FILE_INFORMATION_CLASS = 66;
+pub const FileReparsePointInformation: FILE_INFORMATION_CLASS = 33;
+pub const FileReplaceCompletionInformation: FILE_INFORMATION_CLASS = 61;
+pub const FileSfioReserveInformation: FILE_INFORMATION_CLASS = 44;
+pub const FileSfioVolumeInformation: FILE_INFORMATION_CLASS = 45;
+pub const FileShortNameInformation: FILE_INFORMATION_CLASS = 40;
 pub const FileStandardInfo: FILE_INFO_BY_HANDLE_CLASS = 1;
+pub const FileStandardInformation: FILE_INFORMATION_CLASS = 5;
+pub const FileStandardLinkInformation: FILE_INFORMATION_CLASS = 54;
+pub const FileStatBasicInformation: FILE_INFORMATION_CLASS = 77;
+pub const FileStatInformation: FILE_INFORMATION_CLASS = 68;
+pub const FileStatLxInformation: FILE_INFORMATION_CLASS = 70;
 pub const FileStorageInfo: FILE_INFO_BY_HANDLE_CLASS = 16;
+pub const FileStorageReserveIdInformation: FILE_INFORMATION_CLASS = 74;
 pub const FileStreamInfo: FILE_INFO_BY_HANDLE_CLASS = 7;
+pub const FileStreamInformation: FILE_INFORMATION_CLASS = 22;
+pub const FileStreamReservationInformation: FILE_INFORMATION_CLASS = 82;
+pub const FileTrackingInformation: FILE_INFORMATION_CLASS = 36;
+pub const FileUnusedInformation: FILE_INFORMATION_CLASS = 52;
+pub const FileValidDataLengthInformation: FILE_INFORMATION_CLASS = 39;
+pub const FileVolumeNameInformation: FILE_INFORMATION_CLASS = 58;
 pub const FindExInfoBasic: FINDEX_INFO_LEVELS = 1;
 pub const FindExSearchNameMatch: FINDEX_SEARCH_OPS = 0;
 pub const GENERIC_ALL: i32 = 268435456;
@@ -2762,6 +2911,7 @@ pub struct GUID {
 pub type HANDLE = *mut core::ffi::c_void;
 pub const HANDLE_FLAG_INHERIT: i32 = 1;
 pub const HANDLE_FLAG_PROTECT_FROM_CLOSE: i32 = 2;
+pub type HCRYPTPROV = usize;
 pub const HIGH_PRIORITY_CLASS: i32 = 128;
 pub type HINSTANCE = *mut core::ffi::c_void;
 pub type HLOCAL = HANDLE;
@@ -2795,6 +2945,8 @@ pub const INHERIT_PARENT_AFFINITY: i32 = 65536;
 pub type INIT_ONCE = RTL_RUN_ONCE;
 pub const INIT_ONCE_INIT_FAILED: u32 = 4;
 pub const INVALID_FILE_ATTRIBUTES: u32 = 4294967295;
+pub const INVALID_FILE_SIZE: u32 = 4294967295;
+pub const INVALID_SET_FILE_POINTER: u32 = 4294967295;
 pub const INVALID_SOCKET: SOCKET = 18446744073709551615u64 as usize;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -2926,9 +3078,16 @@ pub const IP_MULTICAST_LOOP: i32 = 11;
 pub const IP_MULTICAST_TTL: i32 = 10;
 pub const IP_TTL: i32 = 4;
 pub type LINGER = linger;
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LIST_ENTRY {
+    pub Flink: *mut Self,
+    pub Blink: *mut Self,
+}
 pub const LOCKFILE_EXCLUSIVE_LOCK: i32 = 2;
 pub const LOCKFILE_FAIL_IMMEDIATELY: i32 = 1;
 pub type LPBYTE = *mut u8;
+pub type LPCRITICAL_SECTION = PRTL_CRITICAL_SECTION;
 pub type LPINIT_ONCE = PRTL_RUN_ONCE;
 pub type LPOVERLAPPED_COMPLETION_ROUTINE = Option<
     unsafe extern "system" fn(
@@ -3087,6 +3246,9 @@ pub const PROFILE_KERNEL: i32 = 536870912;
 pub const PROFILE_SERVER: i32 = 1073741824;
 pub const PROFILE_USER: i32 = 268435456;
 pub const PROGRESS_CONTINUE: i32 = 0;
+pub const PROV_RSA_FULL: i32 = 1;
+pub type PRTL_CRITICAL_SECTION = *mut RTL_CRITICAL_SECTION;
+pub type PRTL_CRITICAL_SECTION_DEBUG = *mut RTL_CRITICAL_SECTION_DEBUG;
 pub type PRTL_RUN_ONCE = *mut RTL_RUN_ONCE;
 pub type PSTR = *mut u8;
 pub type PTHREAD_START_ROUTINE =
@@ -3108,6 +3270,29 @@ pub const REALTIME_PRIORITY_CLASS: i32 = 256;
 #[derive(Clone, Copy, Default)]
 pub struct RTL_CONDITION_VARIABLE {
     pub Ptr: *mut core::ffi::c_void,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RTL_CRITICAL_SECTION {
+    pub DebugInfo: PRTL_CRITICAL_SECTION_DEBUG,
+    pub LockCount: i32,
+    pub RecursionCount: i32,
+    pub OwningThread: HANDLE,
+    pub LockSemaphore: HANDLE,
+    pub SpinCount: usize,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RTL_CRITICAL_SECTION_DEBUG {
+    pub Type: u16,
+    pub CreatorBackTraceIndex: u16,
+    pub CriticalSection: *mut RTL_CRITICAL_SECTION,
+    pub ProcessLocksList: LIST_ENTRY,
+    pub EntryCount: u32,
+    pub ContentionCount: u32,
+    pub Flags: u32,
+    pub CreatorBackTraceIndexHigh: u16,
+    pub Identifier: u16,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -3259,6 +3444,18 @@ pub const SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE: i32 = 2;
 pub const SYMBOLIC_LINK_FLAG_DIRECTORY: i32 = 1;
 pub const SYMLINK_FLAG_RELATIVE: i32 = 1;
 pub const SYNCHRONIZE: i32 = 1048576;
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SYSTEMTIME {
+    pub wYear: u16,
+    pub wMonth: u16,
+    pub wDayOfWeek: u16,
+    pub wDay: u16,
+    pub wHour: u16,
+    pub wMinute: u16,
+    pub wSecond: u16,
+    pub wMilliseconds: u16,
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SYSTEM_INFO {
@@ -3467,6 +3664,35 @@ impl Default for WSAPROTOCOLCHAIN {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct WSAPROTOCOL_INFOA {
+    pub dwServiceFlags1: u32,
+    pub dwServiceFlags2: u32,
+    pub dwServiceFlags3: u32,
+    pub dwServiceFlags4: u32,
+    pub dwProviderFlags: u32,
+    pub ProviderId: GUID,
+    pub dwCatalogEntryId: u32,
+    pub ProtocolChain: WSAPROTOCOLCHAIN,
+    pub iVersion: i32,
+    pub iAddressFamily: i32,
+    pub iMaxSockAddr: i32,
+    pub iMinSockAddr: i32,
+    pub iSocketType: i32,
+    pub iProtocol: i32,
+    pub iProtocolMaxOffset: i32,
+    pub iNetworkByteOrder: i32,
+    pub iSecurityScheme: i32,
+    pub dwMessageSize: u32,
+    pub dwProviderReserved: u32,
+    pub szProtocol: [i8; 256],
+}
+impl Default for WSAPROTOCOL_INFOA {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct WSAPROTOCOL_INFOW {
     pub dwServiceFlags1: u32,
     pub dwServiceFlags2: u32,
@@ -3610,6 +3836,15 @@ impl Default for fd_set {
     fn default() -> Self {
         unsafe { core::mem::zeroed() }
     }
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct hostent {
+    pub h_name: *mut i8,
+    pub h_aliases: *mut *mut i8,
+    pub h_addrtype: i16,
+    pub h_length: i16,
+    pub h_addr_list: *mut *mut i8,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
