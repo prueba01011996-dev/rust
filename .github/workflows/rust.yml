@@ -1,0 +1,74 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+# Flujos de trabajo
+
+Obtenga una visión general de los flujos de trabajo de GitHub Actions, incluidos activadores, sintaxis y funciones avanzadas.
+
+## Acerca de los flujos de trabajo
+
+Un **flujo de trabajo** es un proceso automatizado configurable que ejecutará uno o más trabajos. Los flujos de trabajo se definen mediante un archivo de YAML que se verifica en tu repositorio y se ejecutará cuando lo active un evento dentro de este o puede activarse manualmente o en una programación definida.
+
+Los flujos de trabajo se definen en el directorio `.github/workflows` de un repositorio. Un repositorio puede tener varios flujos de trabajo, y cada uno puede realizar un conjunto diferente de tareas, como las siguientes:
+
+* Compilar y probar de solicitudes de incorporación de cambios
+* Implementar la aplicación cada vez que se crea una versión
+* Agregar una etiqueta cada vez que se abre una incidencia nueva
+
+## Conceptos básicos del flujo de trabajo
+
+Un flujo de trabajo debe contener los siguientes componentes básicos:
+
+1. Uno o varios *eventos* que desencadenarán el flujo de trabajo.
+2. Uno o varios *trabajos*, cada uno de los cuales se ejecutará en una máquina *runner* y correrá una serie de uno o varios *pasos*.
+3. Cada paso puede ejecutar un script que definas, o bien una acción, que es una extensión reutilizable que puede simplificar el flujo de trabajo.
+
+Para obtener más información sobre estos componentes básicos, consulta [Descripción de Acciones de GitHub](/es/actions/get-started/understand-github-actions#the-components-of-github-actions).
+
+![Diagrama de un evento que desencadena el ejecutor 1 para ejecutar el trabajo 1, que desencadena el ejecutor 2 para ejecutar el trabajo 2. Cada uno de los trabajos se divide en varios pasos.](/assets/images/help/actions/overview-actions-simple.png)
+
+## Desencadenadores de flujo de trabajo
+
+Los activadores de los flujos de trabajo son eventos que ocasionan que se ejecute un flujo de trabajo. Estos eventos pueden ser:
+
+* Eventos que ocurren en el repositorio de tu flujo de trabajo
+* Eventos que se producen fuera de GitHub y desencadenan un `repository_dispatch` evento en GitHub
+* Tiempos programados
+* Manual
+
+Por ejemplo, puedes configurar tu flujo de trabajo para que se ejecute cuando se haga un push a la rama predeterminada de tu repositorio, cuando se publique una versión o cuando se abra una incidencia.
+
+Los desencadenadores de flujos de trabajo se definen con la clave `on`. Para más información, consulta [Sintaxis del flujo de trabajo para Acciones de GitHub](/es/actions/reference/workflows-and-actions/workflow-syntax#on).
+
+Los siguientes pasos se producen para activar una ejecución de flujo de trabajo:
+
+1. Se produce un evento en tu repositorio. El evento tiene un SHA de confirmación asociado y una ref de Git.
+2. GitHub busca en el directorio `.github/workflows` de la raíz de tu repositorio los archivos de flujo de trabajo que están presentes en el SHA de confirmación o la referencia de Git asociados al evento.
+3. Se desencadena una ejecución de flujos de trabajo para cualquier flujo de trabajo que tenga valores `on:` que coincidan con el evento desencadenador. Algunos eventos también requieren que el flujo de trabajo esté presente en la rama predeterminada del repositorio para poder ejecutarse.
+
+Cada ejecución de flujo de trabajo utiliza la versión de este que esté presente en el SHA de confirmación asociado o Git Ref del evento. Cuando se ejecuta un flujo de trabajo, GitHub establece las `GITHUB_SHA` variables de entorno (commit SHA) y `GITHUB_REF` (Git ref) en el entorno del ejecutor. Para más información, consulta [Almacenamiento de información en variables](/es/actions/how-tos/write-workflows/choose-what-workflows-do/use-variables).
+
+Para más información, consulta [Activar un flujo de trabajo](/es/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+## Pasos siguientes
+
+Para compilar tu primer flujo de trabajo, consulta [Creación de un flujo de trabajo de ejemplo](/es/actions/tutorials/create-an-example-workflow).
