@@ -28,9 +28,9 @@ use rustc_span::{RealFileName, Span, Symbol};
 use rustc_structures::{CrateType, Limit};
 use rustc_target::asm::InlineAsmArch;
 use rustc_target::spec::{
-    Arch, CfgAbi, CodeModel, DebuginfoKind, Os, PanicStrategy, RelocModel, RelroLevel,
-    SanitizerSet, SmallDataThresholdSupport, SplitDebuginfo, StackProtector, SymbolVisibility,
-    Target, TargetTuple, TlsModel, apple,
+    Arch, CfgAbi, CodeModel, DebuginfoKind, MergeFunctions, Os, PanicStrategy, RelocModel,
+    RelroLevel, SanitizerSet, SmallDataThresholdSupport, SplitDebuginfo, StackProtector,
+    SymbolVisibility, Target, TargetTuple, TlsModel, apple,
 };
 
 use crate::code_stats::CodeStats;
@@ -422,6 +422,10 @@ impl EarlySession {
             .unstable_opts
             .sanitizer
             .combine_with_defaults(self.target.options.default_sanitizers)
+    }
+
+    pub fn merge_functions(&self) -> MergeFunctions {
+        self.opts.unstable_opts.merge_functions.unwrap_or(self.target.merge_functions)
     }
 }
 
@@ -1840,10 +1844,11 @@ fn validate_commandline_args_with_session_available(sess: &Session) {
 
 /// Holds data on the current incremental compilation session, if there is one.
 pub struct IncrCompSession {
-    /// The directory containing all cached data. Cached data from a previous
-    /// session can be read out of it and new data for the current session will
-    /// be written into it.
-    pub session_directory: flock::LockedDir,
+    /// The directory from which cached data of a previous session can be read.
+    pub old_session_directory: Option<flock::LockedDir>,
+    /// The directory to which cached data for the current session can be
+    /// written to.
+    pub new_session_directory: flock::LockedDir,
 }
 
 /// A wrapper around an [`DiagCtxt`] that is used for early error emissions.

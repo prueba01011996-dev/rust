@@ -11,6 +11,8 @@ use rustc_ast::{
     PathSegment, Ty, TyKind,
 };
 use rustc_ast_pretty::pprust::{path_to_string, where_bound_predicate_to_string};
+use rustc_attr_ir::diagnostic::{CustomDiagnostic, FormatArgs};
+use rustc_attr_ir::find_attr;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap, FxIndexSet};
 use rustc_data_structures::unord::UnordItems;
 use rustc_errors::codes::*;
@@ -18,12 +20,10 @@ use rustc_errors::{
     Applicability, Diag, Diagnostic, ErrorGuaranteed, MultiSpan, SuggestionStyle, pluralize,
     struct_span_code_err,
 };
-use rustc_hir as hir;
-use rustc_hir::attrs::diagnostic::{CustomDiagnostic, FormatArgs};
 use rustc_hir::def::Namespace::{self, *};
 use rustc_hir::def::{CtorKind, CtorOf, DefKind, MacroKinds};
 use rustc_hir::def_id::{CRATE_DEF_ID, DefId};
-use rustc_hir::{MissingLifetimeKind, PrimTy, find_attr};
+use rustc_hir::{MissingLifetimeKind, PrimTy};
 use rustc_lint_defs::builtin::{SINGLE_USE_LIFETIMES, UNUSED_LIFETIMES};
 use rustc_middle::ty;
 use rustc_session::Session;
@@ -1220,7 +1220,7 @@ impl<'ast, 'ra, 'tcx> LateResolutionVisitor<'_, 'ast, 'ra, 'tcx> {
                         err.note("constructor is not visible here due to private fields");
                     }
                 } else {
-                    err.span_suggestion(
+                    err.span_suggestion_verbose(
                         call_span,
                         format!("try calling `{ident}` as a method"),
                         format!("self.{path_str}({args_snippet})"),
@@ -1287,7 +1287,7 @@ impl<'ast, 'ra, 'tcx> LateResolutionVisitor<'_, 'ast, 'ra, 'tcx> {
                     // confused by them.
                     continue;
                 }
-                if let Some(d) = hir::find_attr!(r.tcx, did, Doc(d) => d)
+                if let Some(d) = find_attr!(r.tcx, did, Doc(d) => d)
                     && d.aliases.contains_key(&item_name)
                 {
                     return Some(did);
@@ -4164,11 +4164,11 @@ impl<'ast, 'ra, 'tcx> LateResolutionVisitor<'_, 'ast, 'ra, 'tcx> {
                     name: lifetime_ref.ident.name,
                     param_kind: diagnostics::ParamKindInNonTrivialAnonConst::Lifetime,
                     help: self.r.tcx.sess.is_nightly_build()
-                        && !self.r.features.min_generic_const_args(),
-                    is_gca: self.r.features.generic_const_args(),
-                    help_gca: self.r.features.generic_const_args(),
+                        && !self.r.features.gca_min_const_items(),
+                    is_gca: self.r.features.gca_const_items(),
+                    help_gca: self.r.features.gca_const_items(),
                     help_suggest_gca: self.r.tcx.sess.is_nightly_build()
-                        && !self.r.features.generic_const_args(),
+                        && !self.r.features.gca_const_items(),
                 })
             }
         }

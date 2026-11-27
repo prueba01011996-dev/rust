@@ -26,8 +26,9 @@ use rustc_hir_analysis::hir_ty_lowering::HirTyLowerer as _;
 use rustc_infer::infer::{self, DefineOpaqueTypes, InferOk, RegionVariableOrigin};
 use rustc_infer::traits::query::NoSolution;
 use rustc_middle::ty::adjustment::{Adjust, Adjustment, AllowTwoPhase};
+use rustc_middle::ty::consts::ConstExt;
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
-use rustc_middle::ty::{self, AdtKind, GenericArgsRef, Ty, TypeVisitableExt, Unnormalized};
+use rustc_middle::ty::{self, AdtKind, ConstKind, GenericArgsRef, Ty, TypeVisitableExt, Unnormalized};
 use rustc_session::diagnostics::feature_err;
 use rustc_span::edit_distance::find_best_match_for_name;
 use rustc_span::hygiene::DesugaringKind;
@@ -1701,32 +1702,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             self.next_ty_var(expr.span)
         };
         let array_len = args.len() as u64;
-        self.suggest_array_len(expr, array_len);
         Ty::new_array(self.tcx, element_ty, array_len)
-    }
-
-    fn suggest_array_len(&self, expr: &'tcx hir::Expr<'tcx>, array_len: u64) {
-        let parent_node = self.tcx.hir_parent_iter(expr.hir_id).find(|(_, node)| {
-            !matches!(node, hir::Node::Expr(hir::Expr { kind: hir::ExprKind::AddrOf(..), .. }))
-        });
-        let Some((_, hir::Node::LetStmt(hir::LetStmt { ty: Some(ty), .. }))) = parent_node else {
-            return;
-        };
-        if let hir::TyKind::Array(_, ct) = ty.peel_refs().kind {
-            let span = ct.span;
-            self.dcx().try_steal_modify_and_emit_err(
-                span,
-                StashKey::UnderscoreForArrayLengths,
-                |err| {
-                    err.span_suggestion_verbose(
-                        span,
-                        "consider specifying the array length",
-                        array_len,
-                        Applicability::MaybeIncorrect,
-                    );
-                },
-            );
-        }
     }
 
     pub(super) fn check_expr_const_block(
@@ -1763,14 +1739,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ),
         );
 
-        if let Some(count) = count.try_to_target_usize(tcx) {
-            self.suggest_array_len(expr, count);
-        }
-
         let uty = match expected {
             ExpectHasType(uty) => uty.builtin_index(),
             _ => None,
         };
+
+        let old_diverges = self.diverges.get();
 
         let (element_ty, t) = match uty {
             Some(uty) => {
@@ -1783,6 +1757,39 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 (element_ty, ty)
             }
         };
+
+        // FIXME: remove this workaround for an unsoundness (#165323) once it's no longer needed.
+        //
+        // MIR building lowers `[CONST; 0]` to `[]`, making `CONST` not evaluated.
+        //
+        // This is a problem, because it means if `CONST` is `const { panic!() }`, the side effect
+        // of panic / failing compilation never happens. In such cases we need to ignore divergence
+        // from the `CONST`, as otherwise we can end up executing code that was assumed unreachable.
+        let count_is_zero = match count.kind() {
+            // This is the exact check that mir building does
+            ConstKind::Value(v) => v.try_to_target_usize(tcx) == Some(0),
+
+            // An infer const can get inferred to 0.
+            //
+            // We could check the expectation here to do ad-hoc inference, but that feels quite
+            // error prone and annoying.
+            ConstKind::Infer(_) => true,
+
+            // While const generic params can be substituted with 0, mir building specifically
+            // checks for value 0 before monomorphization, so they (alongside aliases, etc) cannot
+            // trigger the bug.
+            ConstKind::Param(_)
+            | ConstKind::Placeholder(_)
+            | ConstKind::Alias(..)
+            | ConstKind::Error(_)
+            | ConstKind::Expr(_) => false,
+
+            ConstKind::Bound(..) => bug!(),
+        };
+
+        if count_is_zero && element.is_constant_for_zero_repeat() {
+            self.diverges.set(old_diverges);
+        }
 
         if let Err(guar) = element_ty.error_reported() {
             return Ty::new_error(tcx, guar);

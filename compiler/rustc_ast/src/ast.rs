@@ -1623,7 +1623,7 @@ impl Expr {
             | ExprKind::UnsafeBinderCast(..)
             | ExprKind::While(..)
             | ExprKind::Yield(YieldKind::Postfix(..))
-            | ExprKind::DirectConstArg(..)
+            | ExprKind::GcaMacro(..)
             | ExprKind::Err(_)
             | ExprKind::Dummy => prefix_attrs_precedence(&self.attrs),
         }
@@ -1920,8 +1920,8 @@ pub enum ExprKind {
 
     UnsafeBinderCast(UnsafeBinderCastKind, Box<Expr>, Option<Box<Ty>>),
 
-    /// An mGCA `direct_const_arg!()` expression.
-    DirectConstArg(Box<Expr>),
+    /// An mGCA `gca!()` expression.
+    GcaMacro(Box<Expr>),
 
     /// Placeholder for an expression that wasn't syntactically well formed in some way.
     Err(ErrorGuaranteed),
@@ -2402,7 +2402,7 @@ pub struct BorrowedFnSig<'a> {
 /// * the `G<Ty> = Ty` in `Trait<G<Ty> = Ty>`
 /// * the `A: Bound` in `Trait<A: Bound>`
 /// * the `RetTy` in `Trait(ArgTy, ArgTy) -> RetTy`
-/// * the `C = { Ct }` in `Trait<C = { Ct }>` (feature `min_generic_const_args`)
+/// * the `C = { Ct }` in `Trait<C = { Ct }>` (feature `gca_min_const_items`)
 /// * the `f(..): Bound` in `Trait<f(..): Bound>` (feature `return_type_notation`)
 #[derive(Clone, Encodable, Decodable, Debug, Walkable)]
 pub struct AssocItemConstraint {
@@ -2579,8 +2579,8 @@ pub enum TyKind {
     FieldOf(Box<Ty>, Option<Ident>, Ident),
     /// A view of a type. `T.{ field_1, field_2 }`.
     View(Box<Ty>, #[visitable(ignore)] ThinVec<Ident>),
-    /// An mGCA `direct_const_arg!()` expression.
-    DirectConstArg(Box<Expr>),
+    /// An mGCA `gca!()` expression.
+    GcaMacro(Box<Expr>),
     /// Sometimes we need a dummy value when no error has occurred.
     Dummy,
     /// Placeholder for a kind that has failed to be defined.

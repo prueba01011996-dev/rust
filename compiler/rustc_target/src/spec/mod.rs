@@ -927,8 +927,15 @@ impl ToJson for SmallDataThresholdSupport {
 
 crate::target_spec_enum! {
     pub enum MergeFunctions {
+        /// Disable function merging entirely.
         Disabled = "disabled",
+        /// Allow function merging via trampolines (i.e., functions can be implemented
+        /// in terms of a jump to an unrelated function with identical behavior), but
+        /// not via object-format-level global aliases.
         Trampolines = "trampolines",
+        /// (Default) allow function merging via either trampolines or (object format
+        /// level) global aliases. LLVM will normally use global aliases for merging, but
+        /// trampolines are also permissible.
         Aliases = "aliases",
     }
 
@@ -1484,9 +1491,12 @@ supported_targets! {
     ("x86_64-pc-windows-gnu", x86_64_pc_windows_gnu),
     ("x86_64-uwp-windows-gnu", x86_64_uwp_windows_gnu),
     ("x86_64-win7-windows-gnu", x86_64_win7_windows_gnu),
+    ("x86_64-rust9x-windows-gnu", x86_64_rust9x_windows_gnu),
     ("i686-pc-windows-gnu", i686_pc_windows_gnu),
     ("i686-uwp-windows-gnu", i686_uwp_windows_gnu),
     ("i686-win7-windows-gnu", i686_win7_windows_gnu),
+    ("i686-rust9x-windows-gnu", i686_rust9x_windows_gnu),
+    ("i586-rust9x-windows-gnu", i586_rust9x_windows_gnu),
 
     ("aarch64-pc-windows-gnullvm", aarch64_pc_windows_gnullvm),
     ("i686-pc-windows-gnullvm", i686_pc_windows_gnullvm),
@@ -1498,9 +1508,13 @@ supported_targets! {
     ("x86_64-pc-windows-msvc", x86_64_pc_windows_msvc),
     ("x86_64-uwp-windows-msvc", x86_64_uwp_windows_msvc),
     ("x86_64-win7-windows-msvc", x86_64_win7_windows_msvc),
+    ("x86_64-rust9x-windows-msvc", x86_64_rust9x_windows_msvc),
     ("i686-pc-windows-msvc", i686_pc_windows_msvc),
     ("i686-uwp-windows-msvc", i686_uwp_windows_msvc),
     ("i686-win7-windows-msvc", i686_win7_windows_msvc),
+    ("i686-rust9x-windows-msvc", i686_rust9x_windows_msvc),
+    ("i586-rust9x-windows-msvc", i586_rust9x_windows_msvc),
+    ("i486-rust9x-windows-msvc", i486_rust9x_windows_msvc),
     ("thumbv7a-pc-windows-msvc", thumbv7a_pc_windows_msvc),
     ("thumbv7a-uwp-windows-msvc", thumbv7a_uwp_windows_msvc),
 
@@ -1950,7 +1964,6 @@ crate::target_spec_enum! {
         Spe = "spe",
         Uwp = "uwp",
         VecDefault = "vec-default",
-        VecExtAbi = "vec-extabi",
         X32 = "x32",
         V8Plus = "v8plus",
         Unspecified = "",

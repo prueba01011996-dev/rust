@@ -1,6 +1,5 @@
 use std::range::{RangeFrom, RangeToInclusive};
 
-use hir::def_id::DefId;
 use rustc_abi as abi;
 use rustc_abi::Integer::{I8, I32};
 use rustc_abi::Primitive::{self, Float, Int, Pointer};
@@ -9,10 +8,10 @@ use rustc_abi::{
     LayoutCalculatorError, LayoutData, Niche, ReprOptions, Scalar, Size, StructKind, TagEncoding,
     VariantIdx, Variants, WrappingRange,
 };
+use rustc_attr_ir::find_attr;
+use rustc_attr_ir::lang_items::LangItem;
 use rustc_hashes::Hash64;
-use rustc_hir as hir;
-use rustc_hir::attrs::lang_items::LangItem;
-use rustc_hir::find_attr;
+use rustc_hir::def_id::DefId;
 use rustc_index::{Idx as _, IndexVec};
 use rustc_middle::query::Providers;
 use rustc_middle::traits::ObligationCause;
@@ -719,6 +718,18 @@ fn layout_of_uncached<'tcx>(
             let discr_range_of_repr = |min: RangeFrom<i128>, max: RangeToInclusive<u128>| {
                 abi::Integer::discr_range_of_repr(tcx, ty, &def.repr(), min.start, max.last)
             };
+
+            // We shouldn't be computing the layout of discrs that fail typeck
+            if def.is_enum() {
+                for v in def.variants() {
+                    if let ty::VariantDiscr::Explicit(def_id) = v.discr
+                        && let Some(local_did) = def_id.as_local()
+                        && let Some(guar) = tcx.typeck(local_did).tainted_by_errors
+                    {
+                        return Err(error(cx, LayoutError::ReferencesError(guar)));
+                    }
+                }
+            }
 
             let discriminants_iter = || {
                 def.is_enum()

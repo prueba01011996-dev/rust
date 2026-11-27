@@ -2643,11 +2643,15 @@ options! {
     maximal_hir_to_mir_coverage: bool = (false, parse_bool, [TRACKED],
         "save as much information as possible about the correspondence between MIR and HIR \
         as source scopes (default: no)"),
+    #[rustc_lint_opt_deny_field_access("use `Session::merge_functions` instead of this field")]
     merge_functions: Option<MergeFunctions> = (None, parse_merge_functions, [TRACKED],
         "control the operation of the MergeFunctions LLVM pass, taking \
         the same values as the target option of the same name"),
     meta_stats: bool = (false, parse_bool, [UNTRACKED],
         "gather metadata statistics (default: no)"),
+    metadata_crate_hash: bool = (true, parse_bool, [TRACKED],
+        "compute the crate hash (SVH) from the encoded crate metadata; set to `no` to \
+         revert to computing it from the HIR (default: yes)"),
     metrics_dir: Option<PathBuf> = (None, parse_opt_pathbuf, [UNTRACKED],
         "the directory metrics emitted by rustc are dumped into (implicitly enables default set of metrics)"),
     min_function_alignment: Option<Align> = (None, parse_align, [TRACKED],
@@ -2941,6 +2945,9 @@ written to standard error output)"),
         "emit runtime checks for Undefined Behavior (default: -Cdebug-assertions)"),
     ui_testing: bool = (false, parse_bool, [UNTRACKED],
         "emit compiler diagnostics in a form suitable for UI testing (default: no)"),
+    unicows: bool = (true, parse_bool, [UNTRACKED],
+        "rust9x: link `unicows` ahead of the native libraries it wraps on 32-bit rust9x targets \
+        (default: yes)"),
     uninit_const_chunk_threshold: usize = (16, parse_number, [TRACKED],
         "allow generating const initializers with mixed init/uninit chunks, \
         and set the maximum number of chunks for which this is allowed (default: 16)"),

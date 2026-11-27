@@ -41,6 +41,11 @@ fn msys_tty_on(handle: BorrowedHandle<'_>) -> bool {
     let mut name_info = FILE_NAME_INFO { FileNameLength: 0, FileName: [0; c::MAX_PATH as usize] };
     // Safety: buffer length is fixed.
     let res = unsafe {
+        #[cfg(target_family = "rust9x")]
+        if !crate::sys::compat::checks::is_windows_nt() {
+            return false;
+        }
+
         c::GetFileInformationByHandleEx(
             handle.as_raw_handle(),
             c::FileNameInfo,
